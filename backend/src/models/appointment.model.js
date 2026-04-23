@@ -11,6 +11,11 @@ const appointmentSchema = new mongoose.Schema(
     paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
     paidAt: { type: Date, default: null },
     notes: { type: String },
+    medicalNote: {
+      text: { type: String, default: '' },
+      addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      updatedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

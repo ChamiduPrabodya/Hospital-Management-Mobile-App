@@ -2,9 +2,17 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, FONTS, RADIUS, SHADOW, statusColor } from '../theme';
 
-const AppointmentCard = ({ appointment, onPress }) => {
+const AppointmentCard = ({ appointment, onPress, viewerRole }) => {
   const sc = statusColor(appointment.status);
   const isPaid = appointment.paymentStatus === 'paid';
+  const patientName = appointment.userId?.name || appointment.patientId?.name || 'Unknown patient';
+  const doctorName = appointment.doctorId?.name || 'Unknown doctor';
+  const serviceName = appointment.serviceId?.serviceName || 'Unknown service';
+  const title = viewerRole === 'patient' ? doctorName : patientName;
+  const subtitle = viewerRole === 'admin'
+    ? `${doctorName} - ${serviceName}`
+    : serviceName;
+  const hasMedicalNote = Boolean(appointment.medicalNote?.text);
   const paymentColor = isPaid
     ? { bg: COLORS.successBg, text: COLORS.success, label: 'Paid' }
     : { bg: '#FEF3C7', text: COLORS.warning, label: 'Pending' };
@@ -16,7 +24,7 @@ const AppointmentCard = ({ appointment, onPress }) => {
 
       <View style={styles.body}>
         <View style={styles.topRow}>
-          <Text style={styles.doctor}>{appointment.doctorId?.name}</Text>
+          <Text style={styles.doctor}>{title}</Text>
           <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
             <Text style={[styles.statusText, { color: sc.text }]}>
               {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
@@ -24,7 +32,7 @@ const AppointmentCard = ({ appointment, onPress }) => {
           </View>
         </View>
 
-        <Text style={styles.service}>{appointment.serviceId?.serviceName}</Text>
+        <Text style={styles.service}>{subtitle}</Text>
 
         <View style={styles.paymentRow}>
           <Text style={styles.paymentLabel}>Payment</Text>
@@ -33,6 +41,11 @@ const AppointmentCard = ({ appointment, onPress }) => {
               {paymentColor.label}
             </Text>
           </View>
+          {hasMedicalNote ? (
+            <View style={styles.noteBadge}>
+              <Text style={styles.noteText}>Medical note</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.metaRow}>
@@ -122,6 +135,18 @@ const styles = StyleSheet.create({
   paymentText: {
     fontSize: 11,
     fontWeight: FONTS.bold,
+  },
+  noteBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.tealFaint,
+    marginLeft: 8,
+  },
+  noteText: {
+    fontSize: 11,
+    fontWeight: FONTS.bold,
+    color: COLORS.tealStrong,
   },
   metaRow: {
     flexDirection: 'row',

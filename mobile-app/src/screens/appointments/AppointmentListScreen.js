@@ -78,6 +78,7 @@ const AppointmentListScreen = ({ navigation }) => {
           <View>
             <AppointmentCard
               appointment={item}
+              viewerRole={userInfo?.role}
               onPress={() => navigation.navigate('AppointmentDetails', { appointment: item })}
             />
             {isAdmin && item.status === 'pending' ? (

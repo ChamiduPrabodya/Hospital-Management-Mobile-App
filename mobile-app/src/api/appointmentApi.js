@@ -6,3 +6,4 @@ export const createAppointmentApi = (data) => axios.post('/appointments', data);
 export const updateAppointmentApi = (id, data) => axios.put(`/appointments/${id}`, data);
 export const deleteAppointmentApi = (id) => axios.delete(`/appointments/${id}`);
 export const updateAppointmentStatusApi = (id, status) => axios.patch(`/appointments/${id}/status`, { status });
+export const updateMedicalNoteApi = (id, text) => axios.patch(`/appointments/${id}/medical-note`, { text });

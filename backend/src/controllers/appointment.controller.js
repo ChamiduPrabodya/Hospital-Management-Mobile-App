@@ -86,7 +86,8 @@ exports.getAppointments = asyncHandler(async (req, res) => {
   const appointments = await Appointment.find(filter)
     .populate('doctorId')
     .populate('serviceId')
-    .populate('userId', '-password');
+    .populate('userId', '-password')
+    .populate('medicalNote.addedBy', 'name role');
   res.status(200).json(appointments);
 });
 
@@ -96,7 +97,8 @@ exports.getAppointmentById = asyncHandler(async (req, res) => {
   const appointment = await Appointment.findById(req.params.id)
     .populate('doctorId')
     .populate('serviceId')
-    .populate('userId', '-password');
+    .populate('userId', '-password')
+    .populate('medicalNote.addedBy', 'name role');
 
   if (!appointment) {
     return res.status(404).json({ message: 'Appointment not found' });
@@ -226,4 +228,41 @@ exports.updateAppointmentStatus = asyncHandler(async (req, res) => {
   await appointment.save();
 
   res.status(200).json(appointment);
+});
+
+exports.updateMedicalNote = asyncHandler(async (req, res) => {
+  if (!validateObjectIdParam(res, req.params.id, 'appointment ID')) return;
+
+  const appointment = await Appointment.findById(req.params.id);
+  if (!appointment) {
+    return res.status(404).json({ message: 'Appointment not found' });
+  }
+
+  if (!isAssignedDoctor(req, appointment)) {
+    return res.status(403).json({ message: 'Only the assigned doctor can update medical notes' });
+  }
+
+  const text = String(req.body.text || '').trim();
+  if (!text) {
+    return res.status(400).json({ message: 'Medical note is required' });
+  }
+
+  if (text.length > 5000) {
+    return res.status(400).json({ message: 'Medical note cannot exceed 5000 characters' });
+  }
+
+  appointment.medicalNote = {
+    text,
+    addedBy: req.user._id,
+    updatedAt: new Date(),
+  };
+  await appointment.save();
+
+  const populatedAppointment = await Appointment.findById(appointment._id)
+    .populate('doctorId')
+    .populate('serviceId')
+    .populate('userId', '-password')
+    .populate('medicalNote.addedBy', 'name role');
+
+  res.status(200).json(populatedAppointment);
 });

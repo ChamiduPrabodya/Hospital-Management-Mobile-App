@@ -74,6 +74,7 @@ export const SHADOW = {
 export const statusColor = (status) => {
   switch (status?.toLowerCase()) {
     case 'confirmed':
+    case 'approved':
     case 'completed':
       return { text: COLORS.success, bg: COLORS.successBg };
     case 'pending':

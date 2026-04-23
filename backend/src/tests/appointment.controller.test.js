@@ -16,7 +16,7 @@ const Appointment = require('../models/appointment.model');
 const Doctor = require('../models/doctor.model');
 const Service = require('../models/service.model');
 
-const { createAppointment } = require('../controllers/appointment.controller');
+const { createAppointment, updateMedicalNote } = require('../controllers/appointment.controller');
 
 const ids = {
   doctor: '507f1f77bcf86cd799439011',
@@ -109,5 +109,69 @@ describe('appointment.controller createAppointment', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({ _id: 'app1', userId: ids.user });
     expect(Appointment.create).toHaveBeenCalled();
+  });
+});
+
+describe('appointment.controller updateMedicalNote', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('lets the assigned doctor save a medical note', async () => {
+    const appointment = {
+      _id: 'app1',
+      doctorId: ids.doctor,
+      save: jest.fn().mockResolvedValue(),
+    };
+    const populatedAppointment = {
+      _id: 'app1',
+      doctorId: ids.doctor,
+      medicalNote: { text: 'Patient needs follow-up', addedBy: ids.user },
+    };
+    const query = {
+      populate: jest.fn().mockReturnThis(),
+      then: jest.fn((resolve) => resolve(populatedAppointment)),
+    };
+    Appointment.findById
+      .mockResolvedValueOnce(appointment)
+      .mockReturnValueOnce(query);
+
+    const req = {
+      user: { _id: ids.user, role: 'doctor', doctorProfileId: ids.doctor },
+      params: { id: ids.service },
+      body: { text: 'Patient needs follow-up' },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await updateMedicalNote(req, res, next);
+
+    expect(appointment.medicalNote.text).toBe('Patient needs follow-up');
+    expect(appointment.medicalNote.addedBy).toBe(ids.user);
+    expect(appointment.save).toHaveBeenCalled();
+    expect(query.populate).toHaveBeenCalledTimes(4);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(populatedAppointment);
+  });
+
+  it('blocks doctors who are not assigned to the appointment', async () => {
+    Appointment.findById.mockResolvedValue({
+      _id: 'app1',
+      doctorId: ids.doctor,
+      save: jest.fn(),
+    });
+
+    const req = {
+      user: { _id: ids.user, role: 'doctor', doctorProfileId: '507f1f77bcf86cd799439099' },
+      params: { id: ids.service },
+      body: { text: 'Patient needs follow-up' },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await updateMedicalNote(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Only the assigned doctor can update medical notes' });
   });
 });

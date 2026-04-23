@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { getAppointmentsApi } from '../../api/appointmentApi';
+import AppointmentCard from '../../components/AppointmentCard';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
 const ADMIN_CARDS = [
@@ -29,30 +32,81 @@ const AdminCard = ({ item, onPress }) => (
   </TouchableOpacity>
 );
 
-const AdminDashboardScreen = ({ navigation }) => (
-  <View style={styles.root}>
-    <StatusBar barStyle="light-content" backgroundColor={COLORS.navyDeep} />
+const AdminDashboardScreen = ({ navigation }) => {
+  const [appointments, setAppointments] = useState([]);
 
-    <View style={styles.hero}>
-      <View style={styles.circle1} /><View style={styles.circle2} />
-      <Text style={styles.heroEst}>VICTORIA HOSPITAL</Text>
-      <Text style={styles.heroTitle}>Admin Dashboard</Text>
-      <View style={styles.accentBar} />
-      <Text style={styles.heroSub}>Manage hospital operations</Text>
+  const loadAppointments = useCallback(async () => {
+    try {
+      const res = await getAppointmentsApi();
+      const appointmentData = Array.isArray(res.data) ? res.data : res.data?.data;
+      const sortedAppointments = (Array.isArray(appointmentData) ? appointmentData : [])
+        .slice()
+        .sort((a, b) => new Date(b.createdAt || b.appointmentDate) - new Date(a.createdAt || a.appointmentDate));
+      setAppointments(sortedAppointments);
+    } catch (error) {
+      console.error('Failed to load admin dashboard appointments:', error.response?.data || error.message);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointments();
+    }, [loadAppointments])
+  );
+
+  const pendingCount = appointments.filter((item) => item.status === 'pending').length;
+  const recentAppointments = appointments.slice(0, 3);
+
+  return (
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.navyDeep} />
+
+      <View style={styles.hero}>
+        <View style={styles.circle1} /><View style={styles.circle2} />
+        <Text style={styles.heroEst}>VICTORIA HOSPITAL</Text>
+        <Text style={styles.heroTitle}>Admin Dashboard</Text>
+        <View style={styles.accentBar} />
+        <Text style={styles.heroSub}>Manage hospital operations</Text>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
+        {ADMIN_CARDS.map((item) => (
+          <AdminCard key={item.key} item={item} onPress={() => navigation.navigate(item.key)} />
+        ))}
+
+        <View style={styles.dashboardSection}>
+          <View style={styles.previewHeader}>
+            <View>
+              <Text style={styles.sectionLabelInline}>RECENT BOOKINGS</Text>
+              <Text style={styles.sectionSubInline}>
+                {pendingCount} pending, {appointments.length} total
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Appointments')} activeOpacity={0.8}>
+              <Text style={styles.viewAllText}>View all</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentAppointments.length > 0 ? recentAppointments.map((item) => (
+            <AppointmentCard
+              key={item._id}
+              appointment={item}
+              viewerRole="admin"
+              onPress={() => navigation.navigate('AppointmentDetails', { appointment: item })}
+            />
+          )) : (
+            <Text style={styles.emptyPreviewText}>No patient bookings yet.</Text>
+          )}
+        </View>
+      </ScrollView>
     </View>
-
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
-      {ADMIN_CARDS.map((item) => (
-        <AdminCard key={item.key} item={item} onPress={() => navigation.navigate(item.key)} />
-      ))}
-    </ScrollView>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bgPage },
@@ -89,6 +143,25 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 12, fontWeight: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
   cardIcon: { width: 40, height: 40, borderRadius: RADIUS.md, marginRight: 14, alignItems: 'center', justifyContent: 'center' },
   arrowR: { width: 8, height: 8, borderRightWidth: 2, borderTopWidth: 2, transform: [{ rotate: '45deg' }] },
+
+  dashboardSection: { marginTop: 22 },
+  previewHeader: {
+    marginHorizontal: 4,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionLabelInline: { fontSize: 10, fontWeight: FONTS.bold, color: COLORS.tealBright, letterSpacing: 2, marginBottom: 4 },
+  sectionSubInline: { fontSize: 12, color: COLORS.textMuted },
+  viewAllText: { fontSize: 12, fontWeight: FONTS.bold, color: COLORS.tealStrong },
+  emptyPreviewText: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    color: COLORS.textMuted,
+    ...SHADOW.card,
+  },
 });
 
 export default AdminDashboardScreen;

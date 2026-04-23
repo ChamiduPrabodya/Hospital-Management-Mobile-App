@@ -4,8 +4,9 @@ import {
   Platform, StatusBar, TouchableOpacity,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getAppointmentByIdApi } from '../../api/appointmentApi';
+import { getAppointmentByIdApi, updateMedicalNoteApi } from '../../api/appointmentApi';
 import CustomButton from '../../components/CustomButton';
+import CustomInput from '../../components/CustomInput';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS, SHADOW, statusColor } from '../../theme';
@@ -20,8 +21,11 @@ const DetailRow = ({ label, value, valueStyle }) => (
 const AppointmentDetailsScreen = ({ route, navigation }) => {
   const [appointment, setAppointment] = useState(route.params.appointment);
   const [loading, setLoading] = useState(false);
+  const [medicalNoteText, setMedicalNoteText] = useState(route.params.appointment?.medicalNote?.text || '');
+  const [savingNote, setSavingNote] = useState(false);
   const { userInfo } = useContext(AuthContext);
   const isPatient = userInfo?.role === 'patient';
+  const isDoctor = userInfo?.role === 'doctor';
   const sc = statusColor(appointment.status);
   const isPaid = appointment.paymentStatus === 'paid';
 
@@ -31,7 +35,10 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
     try {
       const res = await getAppointmentByIdApi(appointment._id);
       const freshAppointment = res.data?.data || res.data;
-      if (freshAppointment?._id) setAppointment(freshAppointment);
+      if (freshAppointment?._id) {
+        setAppointment(freshAppointment);
+        setMedicalNoteText(freshAppointment.medicalNote?.text || '');
+      }
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to refresh appointment');
     } finally {
@@ -44,6 +51,29 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
       loadAppointment();
     }, [loadAppointment])
   );
+
+  const handleSaveMedicalNote = async () => {
+    const text = medicalNoteText.trim();
+    if (!text) {
+      Alert.alert('Medical Note Required', 'Please enter a medical note before saving.');
+      return;
+    }
+
+    setSavingNote(true);
+    try {
+      const res = await updateMedicalNoteApi(appointment._id, text);
+      const updatedAppointment = res.data?.data || res.data;
+      if (updatedAppointment?._id) {
+        setAppointment(updatedAppointment);
+        setMedicalNoteText(updatedAppointment.medicalNote?.text || '');
+      }
+      Alert.alert('Saved', 'Medical note saved for this patient.');
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to save medical note');
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   if (loading && !appointment) return <LoadingSpinner message="Loading appointment..." />;
 
@@ -144,6 +174,44 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
           </View>
         ) : null}
 
+        <View style={styles.medicalNoteCard}>
+          <Text style={styles.medicalNoteLabel}>MEDICAL NOTE</Text>
+          {appointment.medicalNote?.text ? (
+            <>
+              <Text style={styles.notesText}>{appointment.medicalNote.text}</Text>
+              {appointment.medicalNote.updatedAt ? (
+                <Text style={styles.medicalNoteMeta}>
+                  Updated {new Date(appointment.medicalNote.updatedAt).toLocaleDateString('en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                  })}
+                  {appointment.medicalNote.addedBy?.name ? ` by ${appointment.medicalNote.addedBy.name}` : ''}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.emptyNoteText}>No medical note added yet.</Text>
+          )}
+
+          {isDoctor ? (
+            <View style={styles.noteEditor}>
+              <CustomInput
+                label="Doctor note"
+                value={medicalNoteText}
+                onChangeText={setMedicalNoteText}
+                placeholder="Diagnosis, treatment plan, prescriptions, or follow-up notes..."
+                multiline
+                numberOfLines={5}
+              />
+              <CustomButton
+                title={savingNote ? 'Saving...' : 'Save Medical Note'}
+                onPress={handleSaveMedicalNote}
+                disabled={savingNote}
+                style={styles.saveNoteBtn}
+              />
+            </View>
+          ) : null}
+        </View>
+
         {/* Payment action */}
         {isPatient && appointment.status === 'approved' && !isPaid ? (
           <View style={styles.paymentBanner}>
@@ -226,6 +294,16 @@ const styles = StyleSheet.create({
   },
   notesLabel: { fontSize: 10, fontWeight: FONTS.bold, color: COLORS.tealStrong, letterSpacing: 1.5, marginBottom: 6 },
   notesText: { fontSize: 13, color: COLORS.navyDeep, lineHeight: 20 },
+  medicalNoteCard: {
+    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
+    padding: 16, marginBottom: 14, ...SHADOW.card,
+    borderLeftWidth: 4, borderLeftColor: COLORS.success,
+  },
+  medicalNoteLabel: { fontSize: 10, fontWeight: FONTS.bold, color: COLORS.success, letterSpacing: 1.5, marginBottom: 6 },
+  medicalNoteMeta: { fontSize: 11, color: COLORS.textMuted, marginTop: 8, fontWeight: FONTS.medium },
+  emptyNoteText: { fontSize: 13, color: COLORS.textMuted, lineHeight: 20 },
+  noteEditor: { marginTop: 14 },
+  saveNoteBtn: { marginTop: 0 },
 
   paymentBanner: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,

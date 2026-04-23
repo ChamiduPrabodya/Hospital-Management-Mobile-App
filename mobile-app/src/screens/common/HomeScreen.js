@@ -1,8 +1,11 @@
-import React, { useContext } from 'react';
+import React, { useCallback, useContext, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, StatusBar, Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { getAppointmentsApi } from '../../api/appointmentApi';
+import AppointmentCard from '../../components/AppointmentCard';
 import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
@@ -76,9 +79,34 @@ const QuickCard = ({ item, onPress }) => (
 );
 
 const HomeScreen = ({ navigation }) => {
-  const { userInfo, logout } = useContext(AuthContext);
+  const { userInfo } = useContext(AuthContext);
+  const [doctorAppointments, setDoctorAppointments] = useState([]);
   const role = userInfo?.role || 'patient';
   const content = roleContent(role);
+  const isDoctor = role === 'doctor';
+
+  const loadDoctorAppointments = useCallback(async () => {
+    if (!isDoctor) return;
+    try {
+      const res = await getAppointmentsApi();
+      const appointmentData = Array.isArray(res.data) ? res.data : res.data?.data;
+      const sortedAppointments = (Array.isArray(appointmentData) ? appointmentData : [])
+        .slice()
+        .sort((a, b) => new Date(a.appointmentDate) - new Date(b.appointmentDate));
+      setDoctorAppointments(sortedAppointments);
+    } catch (error) {
+      console.error('Failed to load doctor dashboard appointments:', error.response?.data || error.message);
+    }
+  }, [isDoctor]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDoctorAppointments();
+    }, [loadDoctorAppointments])
+  );
+
+  const pendingCount = doctorAppointments.filter((item) => item.status === 'pending').length;
+  const recentAppointments = doctorAppointments.slice(0, 3);
 
   return (
     <View style={styles.root}>
@@ -121,9 +149,33 @@ const HomeScreen = ({ navigation }) => {
           <QuickCard key={item.key} item={item} onPress={() => navigation.navigate(item.key)} />
         ))}
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.8}>
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
+        {isDoctor ? (
+          <View style={styles.dashboardSection}>
+            <View style={styles.previewHeader}>
+              <View>
+                <Text style={styles.sectionTitleInline}>ASSIGNED BOOKINGS</Text>
+                <Text style={styles.sectionSubInline}>
+                  {pendingCount} pending, {doctorAppointments.length} total
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('Appointments')} activeOpacity={0.8}>
+                <Text style={styles.viewAllText}>View all</Text>
+              </TouchableOpacity>
+            </View>
+
+            {recentAppointments.length > 0 ? recentAppointments.map((item) => (
+              <AppointmentCard
+                key={item._id}
+                appointment={item}
+                viewerRole={role}
+                onPress={() => navigation.navigate('AppointmentDetails', { appointment: item })}
+              />
+            )) : (
+              <Text style={styles.emptyPreviewText}>No assigned patient bookings yet.</Text>
+            )}
+          </View>
+        ) : null}
+
       </ScrollView>
     </View>
   );
@@ -208,16 +260,29 @@ const styles = StyleSheet.create({
   chevron: { paddingLeft: 8 },
   chevronInner: { width: 8, height: 8, borderRightWidth: 2, borderTopWidth: 2, borderColor: COLORS.tealPale, transform: [{ rotate: '45deg' }] },
 
-  logoutBtn: {
-    marginHorizontal: 16,
-    marginTop: 20,
-    paddingVertical: 14,
-    borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    borderColor: COLORS.danger,
+  dashboardSection: { marginTop: 20 },
+  previewHeader: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  logoutText: { fontSize: 14, fontWeight: FONTS.semibold, color: COLORS.danger },
+  sectionTitleInline: {
+    fontSize: 10, fontWeight: FONTS.bold, color: COLORS.tealBright,
+    letterSpacing: 2, marginBottom: 4,
+  },
+  sectionSubInline: { fontSize: 12, color: COLORS.textMuted },
+  viewAllText: { fontSize: 12, fontWeight: FONTS.bold, color: COLORS.tealStrong },
+  emptyPreviewText: {
+    marginHorizontal: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    color: COLORS.textMuted,
+    ...SHADOW.card,
+  },
+
 });
 
 export default HomeScreen;

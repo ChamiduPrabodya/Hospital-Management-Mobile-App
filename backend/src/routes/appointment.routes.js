@@ -6,6 +6,7 @@ const {
   updateAppointment,
   deleteAppointment,
   updateAppointmentStatus,
+  updateMedicalNote,
 } = require('../controllers/appointment.controller');
 const { protect, adminOnly } = require('../middleware/rbac.middleware');
 
@@ -18,5 +19,6 @@ router.get('/:id', getAppointmentById);
 router.put('/:id', updateAppointment);
 router.delete('/:id', deleteAppointment);
 router.patch('/:id/status', adminOnly, updateAppointmentStatus);
+router.patch('/:id/medical-note', updateMedicalNote);
 
 module.exports = router;
