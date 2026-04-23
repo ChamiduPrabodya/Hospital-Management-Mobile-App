@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Alert, Switch,
-  ScrollView,
+  ScrollView, TouchableOpacity, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { createDoctorApi, updateDoctorApi } from '../../api/doctorApi';
+import { uploadDoctorImageApi } from '../../api/uploadApi';
+import { validateEmail } from '../../utils/validators';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -19,15 +22,62 @@ const DoctorFormScreen = ({ route, navigation }) => {
   const [consultationFee, setConsultationFee] = useState(doctor?.consultationFee?.toString() || '');
   const [email, setEmail] = useState(doctor?.userId?.email || '');
   const [password, setPassword] = useState('');
+  const [imageUri, setImageUri] = useState(doctor?.image || '');
+  const [selectedImage, setSelectedImage] = useState(null);
   const [availabilityStatus, setAvailabilityStatus] = useState(
     doctor?.availabilityStatus !== undefined ? Boolean(doctor.availabilityStatus) : true
   );
   const [loading, setLoading] = useState(false);
 
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Please allow photo access to choose a doctor image.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: [ImagePicker.MediaType.Images],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    const asset = result.assets[0];
+    setImageUri(asset.uri);
+    setSelectedImage(asset);
+  };
+
+  const uploadSelectedImage = async (doctorId) => {
+    if (!selectedImage || !doctorId) return;
+
+    const uriParts = selectedImage.uri.split('/');
+    const fallbackName = `doctor-${doctorId}.jpg`;
+    const name = selectedImage.fileName || uriParts[uriParts.length - 1] || fallbackName;
+    const extension = name.split('.').pop()?.toLowerCase();
+    const type = selectedImage.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
+
+    const formData = new FormData();
+    formData.append('doctorId', doctorId);
+    formData.append('doctorImage', {
+      uri: selectedImage.uri,
+      name,
+      type,
+    });
+
+    await uploadDoctorImageApi(formData);
+  };
+
   const handleSubmit = async () => {
     if (!name || !specialization || experience === '') { Alert.alert('Error', 'Please fill required fields'); return; }
     if (!doctor && (!email.trim() || !password.trim())) {
       Alert.alert('Error', 'Please add a unique email and password for the doctor login');
+      return;
+    }
+    if (!email.trim() || !validateEmail(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid unique email for the doctor login');
       return;
     }
     if (password.trim() && password.trim().length < 6) {
@@ -50,8 +100,16 @@ const DoctorFormScreen = ({ route, navigation }) => {
       };
       if (!doctor || normalizedEmail) data.email = normalizedEmail;
       if (password.trim()) data.password = password.trim();
-      await (doctor ? updateDoctorApi(doctor._id, data) : createDoctorApi(data));
-      navigation.goBack();
+      const response = await (doctor ? updateDoctorApi(doctor._id, data) : createDoctorApi(data));
+      const savedDoctor = response.data?.data || response.data;
+      await uploadSelectedImage(savedDoctor?._id || doctor?._id);
+      Alert.alert(
+        doctor ? 'Doctor Updated' : 'Doctor Created',
+        doctor
+          ? 'The doctor profile and login details have been updated.'
+          : 'The doctor can now sign in with the email and password you entered.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Operation failed');
     } finally {
@@ -73,6 +131,19 @@ const DoctorFormScreen = ({ route, navigation }) => {
 
         <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
         <View style={styles.formCard}>
+          <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.85}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.doctorImage} resizeMode="cover" />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Text style={styles.imagePlaceholderText}>+</Text>
+              </View>
+            )}
+            <View style={styles.imageTextWrap}>
+              <Text style={styles.imageTitle}>{imageUri ? 'Change Doctor Image' : 'Add Doctor Image'}</Text>
+              <Text style={styles.imageSub}>JPG or PNG, square photo works best</Text>
+            </View>
+          </TouchableOpacity>
           <CustomInput label="Full Name" value={name} onChangeText={setName} placeholder="Dr. Full Name" />
           <CustomInput label="Specialization" value={specialization} onChangeText={setSpecialization} placeholder="e.g. Cardiologist" />
           <CustomInput label="Experience (yrs)" value={experience} onChangeText={setExperience} placeholder="e.g. 5" keyboardType="numeric" />
@@ -137,6 +208,39 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
     padding: 16, marginBottom: 16, ...SHADOW.card,
   },
+  imagePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.divider,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    marginBottom: 14,
+    backgroundColor: COLORS.bgPage,
+  },
+  doctorImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.bgMuted,
+  },
+  imagePlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.tealFaint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imagePlaceholderText: {
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: FONTS.bold,
+    color: COLORS.tealStrong,
+  },
+  imageTextWrap: { flex: 1, marginLeft: 14 },
+  imageTitle: { fontSize: 14, fontWeight: FONTS.bold, color: COLORS.navyDeep },
+  imageSub: { fontSize: 11, color: COLORS.textMuted, marginTop: 3 },
   toggleCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,

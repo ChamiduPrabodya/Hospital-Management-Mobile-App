@@ -76,6 +76,28 @@ describe('doctor.controller createDoctor', () => {
     expect(Doctor.create).not.toHaveBeenCalled();
   });
 
+  it('rejects invalid doctor login email', async () => {
+    const req = {
+      body: {
+        name: 'Dr Test',
+        specialization: 'Cardiology',
+        experience: 5,
+        email: 'not-an-email',
+        password: 'doctor123',
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await createDoctor(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Doctor email must be valid',
+    });
+    expect(Doctor.create).not.toHaveBeenCalled();
+  });
+
   it('creates doctor profile and linked doctor user', async () => {
     User.findOne.mockResolvedValue(null);
     const doctor = {

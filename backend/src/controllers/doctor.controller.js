@@ -6,6 +6,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
 const { validateObjectIdParam } = require('../utils/validateObjectId');
 
+const isValidEmail = (email) => /\S+@\S+\.\S+/.test(String(email));
+
 exports.createDoctor = asyncHandler(async (req, res) => {
   const {
     name,
@@ -24,6 +26,10 @@ exports.createDoctor = asyncHandler(async (req, res) => {
 
   if (!name || !specialization || experience === undefined || !normalizedEmail || !normalizedPassword) {
     return res.status(400).json({ message: 'Name, specialization, experience, email, and password are required' });
+  }
+
+  if (!isValidEmail(normalizedEmail)) {
+    return res.status(400).json({ message: 'Doctor email must be valid' });
   }
 
   if (normalizedPassword.length < 6) {
@@ -124,6 +130,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
     if (req.body.email !== undefined) {
       const normalizedEmail = String(req.body.email || '').trim().toLowerCase();
       if (!normalizedEmail) return res.status(400).json({ message: 'Doctor email cannot be empty' });
+      if (!isValidEmail(normalizedEmail)) return res.status(400).json({ message: 'Doctor email must be valid' });
 
       const emailOwner = await User.findOne({ email: normalizedEmail, _id: { $ne: user._id } });
       if (emailOwner) return res.status(409).json({ message: 'Doctor email is already used by another account' });

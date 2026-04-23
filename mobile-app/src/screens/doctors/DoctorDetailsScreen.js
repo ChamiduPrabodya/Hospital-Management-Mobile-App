@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import CustomButton from '../../components/CustomButton';
 
 const DoctorDetailsScreen = ({ route, navigation }) => {
@@ -11,6 +11,13 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerCard}>
+        {doctor?.image ? (
+          <Image source={{ uri: doctor.image }} style={styles.doctorImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Text style={styles.imagePlaceholderText}>{doctor?.name?.charAt(0)?.toUpperCase() || 'D'}</Text>
+          </View>
+        )}
         <Text style={styles.name}>{doctor?.name || 'Doctor Name'}</Text>
         <Text style={styles.specialization}>{doctor?.specialization || 'Medical Specialist'}</Text>
         <View style={styles.infoRow}>
@@ -58,21 +65,46 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    alignItems: 'center',
+  },
+  doctorImage: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: '#f1f5f9',
+    marginBottom: 16,
+  },
+  imagePlaceholder: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: '#e0f2f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  imagePlaceholderText: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: '#0d7f6f',
   },
   name: {
     fontSize: 26,
     fontWeight: 'bold',
     color: '#0f172a',
+    textAlign: 'center',
   },
   specialization: {
     fontSize: 16,
     color: '#475569',
     marginTop: 6,
+    textAlign: 'center',
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 18,
+    width: '100%',
   },
   infoBlock: {
     flex: 1,

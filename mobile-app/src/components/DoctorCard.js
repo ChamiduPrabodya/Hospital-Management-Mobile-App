@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
 const DoctorCard = ({ doctor, onPress }) => {
   const fee = doctor.consultationFee !== undefined && doctor.consultationFee !== null
@@ -8,7 +8,16 @@ const DoctorCard = ({ doctor, onPress }) => {
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
-      <View style={[styles.statusDot, { backgroundColor: doctor.availabilityStatus ? '#16a34a' : '#dc2626' }]} />
+      <View>
+        {doctor.image ? (
+          <Image source={{ uri: doctor.image }} style={styles.avatar} resizeMode="cover" />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarText}>{doctor.name?.charAt(0)?.toUpperCase() || 'D'}</Text>
+          </View>
+        )}
+        <View style={[styles.statusDot, { backgroundColor: doctor.availabilityStatus ? '#16a34a' : '#dc2626' }]} />
+      </View>
       <View style={styles.info}>
         <Text style={styles.name}>{doctor.name || 'Doctor name'}</Text>
         <Text style={styles.specialization}>{doctor.specialization || 'Specialist'}</Text>
@@ -37,11 +46,34 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
+  avatar: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#f1f5f9',
+  },
+  avatarPlaceholder: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#e0f2f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0d7f6f',
+  },
   statusDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginTop: 12,
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   info: {
     marginLeft: 14,
