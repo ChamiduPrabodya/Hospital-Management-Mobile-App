@@ -82,6 +82,8 @@ const HospitalInput = ({
   icon,
   textContentType,
   autoComplete,
+  rightActionLabel,
+  onRightActionPress,
 }) => {
   const [focused, setFocused] = useState(false);
   const borderAnim = useRef(new Animated.Value(0)).current;
@@ -139,6 +141,15 @@ const HospitalInput = ({
           onFocus={handleFocus}
           onBlur={handleBlur}
         />
+        {rightActionLabel ? (
+          <TouchableOpacity
+            onPress={onRightActionPress}
+            style={inputStyles.actionButton}
+            activeOpacity={0.7}
+          >
+            <Text style={inputStyles.actionText}>{rightActionLabel}</Text>
+          </TouchableOpacity>
+        ) : null}
       </Animated.View>
     </View>
   );
@@ -148,6 +159,7 @@ const HospitalInput = ({
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
 
@@ -294,9 +306,11 @@ const LoginScreen = ({ navigation }) => {
               value={password}
               onChangeText={setPassword}
               placeholder="Enter your password"
-              secureTextEntry
+              secureTextEntry={!passwordVisible}
               textContentType="password"
               autoComplete="password"
+              rightActionLabel={passwordVisible ? 'Hide' : 'Show'}
+              onRightActionPress={() => setPasswordVisible((current) => !current)}
               icon={
                 <View style={miniIconStyles.lock}>
                   <View style={miniIconStyles.lockArc} />
@@ -580,6 +594,16 @@ const inputStyles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textPrimary,
     fontWeight: '400',
+  },
+  actionButton: {
+    paddingLeft: 8,
+    paddingVertical: 4,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.link,
+    letterSpacing: 0.3,
   },
 });
 

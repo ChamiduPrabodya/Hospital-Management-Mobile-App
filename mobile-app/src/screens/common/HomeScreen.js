@@ -1,10 +1,11 @@
 import React, { useCallback, useContext, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, StatusBar, Platform,
+  ScrollView, StatusBar, Platform, Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getAppointmentsApi } from '../../api/appointmentApi';
+import { getDoctorByIdApi } from '../../api/doctorApi';
 import AppointmentCard from '../../components/AppointmentCard';
 import { AuthContext } from '../../context/AuthContext';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
@@ -81,9 +82,11 @@ const QuickCard = ({ item, onPress }) => (
 const HomeScreen = ({ navigation }) => {
   const { userInfo } = useContext(AuthContext);
   const [doctorAppointments, setDoctorAppointments] = useState([]);
+  const [doctorProfile, setDoctorProfile] = useState(null);
   const role = userInfo?.role || 'patient';
   const content = roleContent(role);
   const isDoctor = role === 'doctor';
+  const doctorProfileId = userInfo?.doctorProfileId?._id || userInfo?.doctorProfileId;
 
   const loadDoctorAppointments = useCallback(async () => {
     if (!isDoctor) return;
@@ -99,10 +102,22 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [isDoctor]);
 
+  const loadDoctorProfile = useCallback(async () => {
+    if (!isDoctor || !doctorProfileId) return;
+    try {
+      const res = await getDoctorByIdApi(doctorProfileId);
+      const profile = res.data?.data || res.data;
+      if (profile?._id) setDoctorProfile(profile);
+    } catch (error) {
+      console.error('Failed to load doctor dashboard profile:', error.response?.data || error.message);
+    }
+  }, [doctorProfileId, isDoctor]);
+
   useFocusEffect(
     useCallback(() => {
       loadDoctorAppointments();
-    }, [loadDoctorAppointments])
+      loadDoctorProfile();
+    }, [loadDoctorAppointments, loadDoctorProfile])
   );
 
   const pendingCount = doctorAppointments.filter((item) => item.status === 'pending').length;
@@ -151,6 +166,42 @@ const HomeScreen = ({ navigation }) => {
 
         {isDoctor ? (
           <View style={styles.dashboardSection}>
+            {doctorProfile ? (
+              <TouchableOpacity
+                style={styles.doctorProfileCard}
+                onPress={() => navigation.navigate('Profile')}
+                activeOpacity={0.86}
+              >
+                {doctorProfile.image ? (
+                  <Image source={{ uri: doctorProfile.image }} style={styles.doctorProfileImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.doctorProfilePlaceholder}>
+                    <Text style={styles.doctorProfileInitial}>{doctorProfile.name?.charAt(0)?.toUpperCase() || 'D'}</Text>
+                  </View>
+                )}
+                <View style={styles.doctorProfileText}>
+                  <Text style={styles.doctorProfileName}>{doctorProfile.name || userInfo?.name || 'Doctor'}</Text>
+                  <Text style={styles.doctorProfileSpec}>{doctorProfile.specialization || 'Specialization N/A'}</Text>
+                  <Text style={styles.doctorProfileMeta}>
+                    {doctorProfile.experience ?? 'N/A'} yrs exp | {doctorProfile.consultationFee !== undefined && doctorProfile.consultationFee !== null
+                      ? `LKR ${Number(doctorProfile.consultationFee).toLocaleString()}`
+                      : 'Fee N/A'}
+                  </Text>
+                </View>
+                <View style={[
+                  styles.doctorStatusBadge,
+                  { backgroundColor: doctorProfile.availabilityStatus ? COLORS.successBg : COLORS.dangerBg },
+                ]}>
+                  <Text style={[
+                    styles.doctorStatusText,
+                    { color: doctorProfile.availabilityStatus ? COLORS.success : COLORS.danger },
+                  ]}>
+                    {doctorProfile.availabilityStatus ? 'Available' : 'Unavailable'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+
             <View style={styles.previewHeader}>
               <View>
                 <Text style={styles.sectionTitleInline}>ASSIGNED BOOKINGS</Text>
@@ -261,6 +312,46 @@ const styles = StyleSheet.create({
   chevronInner: { width: 8, height: 8, borderRightWidth: 2, borderTopWidth: 2, borderColor: COLORS.tealPale, transform: [{ rotate: '45deg' }] },
 
   dashboardSection: { marginTop: 20 },
+  doctorProfileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 14,
+    marginHorizontal: 16,
+    marginBottom: 18,
+    ...SHADOW.card,
+  },
+  doctorProfileImage: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: COLORS.bgMuted,
+  },
+  doctorProfilePlaceholder: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: COLORS.tealFaint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doctorProfileInitial: {
+    fontSize: 22,
+    fontWeight: FONTS.bold,
+    color: COLORS.tealStrong,
+  },
+  doctorProfileText: { flex: 1, marginLeft: 12 },
+  doctorProfileName: { fontSize: 15, fontWeight: FONTS.bold, color: COLORS.navyDeep },
+  doctorProfileSpec: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  doctorProfileMeta: { fontSize: 11, color: COLORS.textMuted, marginTop: 3 },
+  doctorStatusBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    marginLeft: 8,
+  },
+  doctorStatusText: { fontSize: 10, fontWeight: FONTS.bold },
   previewHeader: {
     marginHorizontal: 20,
     marginBottom: 8,

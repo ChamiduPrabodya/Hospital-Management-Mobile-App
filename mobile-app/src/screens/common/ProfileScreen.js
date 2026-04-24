@@ -1,14 +1,29 @@
-import React, { useState, useContext } from 'react';
+import React, { useCallback, useState, useContext } from 'react';
 import {
   View, Text, StyleSheet, Alert, ScrollView,
-  TouchableOpacity, Platform, StatusBar,
+  TouchableOpacity, Platform, StatusBar, Image,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/AuthContext';
 import { updateUserApi } from '../../api/userApi';
+import { getDoctorByIdApi } from '../../api/doctorApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
+
+const DetailRow = ({ label, value, valueStyle }) => (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <Text style={[styles.detailValue, valueStyle]}>{value}</Text>
+  </View>
+);
+
+const formatLkr = (value) => (
+  value !== undefined && value !== null
+    ? `LKR ${Number(value).toLocaleString()}`
+    : 'N/A'
+);
 
 const ProfileScreen = () => {
   const { userInfo, logout } = useContext(AuthContext);
@@ -16,9 +31,32 @@ const ProfileScreen = () => {
   const [email,   setEmail]   = useState(userInfo?.email   || '');
   const [phone,   setPhone]   = useState(userInfo?.phone   || '');
   const [address, setAddress] = useState(userInfo?.address || '');
+  const [doctorProfile, setDoctorProfile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const isDoctor = userInfo?.role === 'doctor';
+  const doctorProfileId = userInfo?.doctorProfileId?._id || userInfo?.doctorProfileId;
+  const displayName = doctorProfile?.name || name;
+  const profileImage = isDoctor ? doctorProfile?.image : userInfo?.profileImage;
 
-  const initials = name ? name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
+  const initials = displayName ? displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
+
+  const loadDoctorProfile = useCallback(async () => {
+    if (!isDoctor || !doctorProfileId) return;
+
+    try {
+      const res = await getDoctorByIdApi(doctorProfileId);
+      const profile = res.data?.data || res.data;
+      if (profile?._id) setDoctorProfile(profile);
+    } catch (error) {
+      console.error('Failed to load doctor profile:', error.response?.data || error.message);
+    }
+  }, [doctorProfileId, isDoctor]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDoctorProfile();
+    }, [loadDoctorProfile])
+  );
 
   const handleUpdate = async () => {
     setLoading(true);
@@ -44,18 +82,56 @@ const ProfileScreen = () => {
         <Text style={styles.heroTitle}>My Profile</Text>
         <View style={styles.accentBar} />
         <View style={styles.avatarWrap}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+          {profileImage ? (
+            <Image source={{ uri: profileImage }} style={styles.avatarImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+          )}
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{userInfo?.role || 'Patient'}</Text>
           </View>
         </View>
-        <Text style={styles.heroName}>{name}</Text>
+        <Text style={styles.heroName}>{displayName}</Text>
         <Text style={styles.heroEmail}>{email}</Text>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {isDoctor ? (
+          <>
+            <Text style={styles.sectionLabel}>PROFESSIONAL PROFILE</Text>
+            <View style={styles.detailCard}>
+              {doctorProfile ? (
+                <>
+                  <DetailRow label="Doctor Name" value={doctorProfile.name || 'N/A'} />
+                  <View style={styles.divider} />
+                  <DetailRow label="Specialization" value={doctorProfile.specialization || 'N/A'} />
+                  <View style={styles.divider} />
+                  <DetailRow label="Experience" value={`${doctorProfile.experience ?? 'N/A'} yrs`} />
+                  <View style={styles.divider} />
+                  <DetailRow label="Consultation Fee" value={formatLkr(doctorProfile.consultationFee)} />
+                  <View style={styles.divider} />
+                  <DetailRow
+                    label="Availability"
+                    value={doctorProfile.availabilityStatus ? 'Available' : 'Not Available'}
+                    valueStyle={{ color: doctorProfile.availabilityStatus ? COLORS.success : COLORS.danger }}
+                  />
+                  <View style={styles.divider} />
+                  <Text style={styles.bioLabel}>Bio</Text>
+                  <Text style={styles.bioText}>
+                    {doctorProfile.description || 'No bio has been added by admin yet.'}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.emptyText}>
+                  Doctor profile details are not available yet. Please ask admin to link this account to a doctor profile.
+                </Text>
+              )}
+            </View>
+          </>
+        ) : null}
+
         <Text style={styles.sectionLabel}>ACCOUNT INFORMATION</Text>
 
         <View style={styles.formCard}>
@@ -98,6 +174,14 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)',
   },
+  avatarImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: COLORS.bgMuted,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
   avatarText: { fontSize: 24, fontWeight: FONTS.bold, color: COLORS.white },
   roleBadge: {
     marginTop: 8, backgroundColor: 'rgba(255,255,255,0.15)',
@@ -114,6 +198,47 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
     padding: 16, marginBottom: 16, ...SHADOW.card,
+  },
+  detailCard: {
+    backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
+    padding: 16, marginBottom: 16, ...SHADOW.card,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: FONTS.semibold,
+    textTransform: 'uppercase',
+  },
+  detailValue: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 13,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.bold,
+    textAlign: 'right',
+  },
+  divider: { height: 1, backgroundColor: COLORS.divider, marginVertical: 11 },
+  bioLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: FONTS.semibold,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  bioText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    lineHeight: 20,
   },
   saveBtn:    { marginBottom: 10 },
   logoutBtn: {
