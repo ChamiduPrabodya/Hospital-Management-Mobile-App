@@ -170,7 +170,7 @@ const HospitalInput = ({
 };
 
 // ─── Main Login Screen ────────────────────────────────────────────────────────
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = ({ navigation, route }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
@@ -204,6 +204,12 @@ const LoginScreen = ({ navigation }) => {
       }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    if (route?.params?.prefilledEmail) {
+      setEmail(route.params.prefilledEmail);
+    }
+  }, [route?.params?.prefilledEmail]);
 
   const updateFieldError = (field, nextEmail, nextPassword) => {
     if (!touched[field] && !errors[field]) {
