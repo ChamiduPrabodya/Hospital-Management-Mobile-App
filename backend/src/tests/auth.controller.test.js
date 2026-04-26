@@ -14,7 +14,8 @@ jest.mock('../utils/generateToken', () => jest.fn(() => 'token'));
 
 const bcrypt = require('bcryptjs');
 const User = require('../models/user.model');
-const { forgotPassword } = require('../controllers/auth.controller');
+const generateToken = require('../utils/generateToken');
+const { forgotPassword, registerUser } = require('../controllers/auth.controller');
 
 const createRes = () => {
   const res = {};
@@ -22,6 +23,129 @@ const createRes = () => {
   res.json = jest.fn().mockReturnValue(res);
   return res;
 };
+
+describe('auth.controller registerUser', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    bcrypt.genSalt.mockResolvedValue('salt');
+    User.exists.mockResolvedValue(true);
+  });
+
+  it('requires name, email, and password', async () => {
+    const req = { body: { name: '', email: '', password: '' } };
+    const res = createRes();
+    const next = jest.fn();
+
+    await registerUser(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Name, email, and password are required',
+    });
+  });
+
+  it('rejects names shorter than 2 characters', async () => {
+    const req = { body: { name: 'A', email: 'patient@example.com', password: 'secret123' } };
+    const res = createRes();
+    const next = jest.fn();
+
+    await registerUser(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Name must be at least 2 characters',
+    });
+  });
+
+  it('rejects invalid email addresses', async () => {
+    const req = { body: { name: 'Jane Doe', email: 'bad-email', password: 'secret123' } };
+    const res = createRes();
+    const next = jest.fn();
+
+    await registerUser(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Email must be valid',
+    });
+  });
+
+  it('rejects short passwords', async () => {
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', password: '123' } };
+    const res = createRes();
+    const next = jest.fn();
+
+    await registerUser(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Password must be at least 6 characters',
+    });
+  });
+
+  it('returns 409 for duplicate email addresses', async () => {
+    User.findOne.mockResolvedValue({ _id: 'existing-user' });
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', password: 'secret123' } };
+    const res = createRes();
+    const next = jest.fn();
+
+    await registerUser(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Email is already registered',
+    });
+  });
+
+  it('trims and normalizes fields before creating the user', async () => {
+    User.findOne.mockResolvedValue(null);
+    User.create.mockResolvedValue({
+      _id: 'user-id',
+      name: 'Jane Doe',
+      email: 'patient@example.com',
+      role: 'patient',
+      doctorProfileId: null,
+      phone: null,
+      address: null,
+      profileImage: null,
+    });
+
+    const req = {
+      body: {
+        name: '  Jane Doe  ',
+        email: '  Patient@Example.com ',
+        password: ' secret123 ',
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await registerUser(req, res, next);
+
+    expect(User.findOne).toHaveBeenCalledWith({ email: 'patient@example.com' });
+    expect(bcrypt.genSalt).toHaveBeenCalledWith(10);
+    expect(bcrypt.hash).toHaveBeenCalledWith('secret123', 'salt');
+    expect(User.create).toHaveBeenCalledWith({
+      name: 'Jane Doe',
+      email: 'patient@example.com',
+      password: 'hashed-password',
+      role: 'patient',
+    });
+    expect(generateToken).toHaveBeenCalledWith('user-id');
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      token: 'token',
+      _id: 'user-id',
+      name: 'Jane Doe',
+      email: 'patient@example.com',
+      role: 'patient',
+      doctorProfileId: null,
+      phone: null,
+      address: null,
+      profileImage: null,
+    });
+  });
+});
 
 describe('auth.controller forgotPassword', () => {
   beforeEach(() => {

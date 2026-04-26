@@ -14,9 +14,21 @@ exports.registerUser = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Name, email, and password are required' });
   }
 
+  if (name.length < 2) {
+    return res.status(400).json({ message: 'Name must be at least 2 characters' });
+  }
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ message: 'Email must be valid' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+
   const existingUser = await User.findOne({ email });
   if (existingUser) {
-    return res.status(400).json({ message: 'Email is already registered' });
+    return res.status(409).json({ message: 'Email is already registered' });
   }
 
   const salt = await bcrypt.genSalt(10);
