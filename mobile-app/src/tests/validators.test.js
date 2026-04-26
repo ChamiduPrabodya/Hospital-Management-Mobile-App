@@ -1,4 +1,5 @@
 import {
+  getForgotPasswordValidationErrors,
   getLoginValidationErrors,
   normalizeEmail,
   normalizePassword,
@@ -41,6 +42,26 @@ describe('mobile-app utils/validators', () => {
     expect(getLoginValidationErrors({
       email: 'patient@example.com',
       password: 'secret123',
+    })).toEqual({});
+  });
+
+  it('returns field errors for forgot password input', () => {
+    expect(getForgotPasswordValidationErrors({
+      email: 'bad-email',
+      password: '123',
+      confirmPassword: '456',
+    })).toEqual({
+      email: 'Enter a valid email address.',
+      password: 'Password must be at least 6 characters.',
+      confirmPassword: 'Passwords do not match.',
+    });
+  });
+
+  it('accepts valid forgot password input', () => {
+    expect(getForgotPasswordValidationErrors({
+      email: 'patient@example.com',
+      password: 'secret123',
+      confirmPassword: 'secret123',
     })).toEqual({});
   });
 });

@@ -3,6 +3,8 @@ const User = require('../models/user.model');
 const generateToken = require('../utils/generateToken');
 const asyncHandler = require('../utils/asyncHandler');
 
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email));
+
 exports.registerUser = asyncHandler(async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
@@ -82,6 +84,33 @@ exports.loginUser = asyncHandler(async (req, res) => {
     address: user.address,
     profileImage: user.profileImage,
   });
+});
+
+exports.forgotPassword = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '').trim();
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and new password are required' });
+  }
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ message: 'Email must be valid' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+
+  const user = await User.findOne({ email, isActive: { $ne: false } });
+  if (!user) {
+    return res.status(404).json({ message: 'No active account found for this email' });
+  }
+
+  user.password = await bcrypt.hash(password, 10);
+  await user.save();
+
+  return res.status(200).json({ message: 'Password reset successful. You can now sign in.' });
 });
 
 exports.getMe = asyncHandler(async (req, res) => {

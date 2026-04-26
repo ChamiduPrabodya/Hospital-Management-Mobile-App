@@ -30,3 +30,30 @@ export const getLoginValidationErrors = ({ email, password }) => {
 
   return errors;
 };
+
+export const getForgotPasswordValidationErrors = ({ email, password, confirmPassword }) => {
+  const errors = {};
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPassword = normalizePassword(password);
+  const normalizedConfirmPassword = normalizePassword(confirmPassword);
+
+  if (!normalizedEmail) {
+    errors.email = 'Email is required.';
+  } else if (!validateEmail(normalizedEmail)) {
+    errors.email = 'Enter a valid email address.';
+  }
+
+  if (!normalizedPassword) {
+    errors.password = 'New password is required.';
+  } else if (!validatePassword(normalizedPassword)) {
+    errors.password = 'Password must be at least 6 characters.';
+  }
+
+  if (!normalizedConfirmPassword) {
+    errors.confirmPassword = 'Please confirm your new password.';
+  } else if (normalizedConfirmPassword !== normalizedPassword) {
+    errors.confirmPassword = 'Passwords do not match.';
+  }
+
+  return errors;
+};
