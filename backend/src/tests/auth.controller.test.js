@@ -4,6 +4,14 @@ jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed-password'),
 }));
 
+jest.mock('crypto', () => ({
+  randomInt: jest.fn(() => 123456),
+  createHash: jest.fn(() => ({
+    update: jest.fn().mockReturnThis(),
+    digest: jest.fn().mockReturnValue('hashed-otp'),
+  })),
+}));
+
 jest.mock('../models/user.model', () => ({
   findOne: jest.fn(),
   create: jest.fn(),
@@ -13,9 +21,15 @@ jest.mock('../models/user.model', () => ({
 jest.mock('../utils/generateToken', () => jest.fn(() => 'token'));
 
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/user.model');
 const generateToken = require('../utils/generateToken');
-const { forgotPassword, registerUser } = require('../controllers/auth.controller');
+const {
+  registerUser,
+  loginUser,
+  requestPasswordResetOtp,
+  resetPasswordWithOtp,
+} = require('../controllers/auth.controller');
 
 const createRes = () => {
   const res = {};
@@ -32,24 +46,22 @@ describe('auth.controller registerUser', () => {
   });
 
   it('requires name, email, and password', async () => {
-    const req = { body: { name: '', email: '', password: '' } };
+    const req = { body: { name: '', email: '', phone: '', password: '' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await registerUser(req, res, next);
+    await registerUser(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      message: 'Name, email, and password are required',
+      message: 'Name, email, phone, and password are required',
     });
   });
 
   it('rejects names shorter than 2 characters', async () => {
-    const req = { body: { name: 'A', email: 'patient@example.com', password: 'secret123' } };
+    const req = { body: { name: 'A', email: 'patient@example.com', phone: '0771234567', password: 'secret123' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await registerUser(req, res, next);
+    await registerUser(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
@@ -58,11 +70,10 @@ describe('auth.controller registerUser', () => {
   });
 
   it('rejects invalid email addresses', async () => {
-    const req = { body: { name: 'Jane Doe', email: 'bad-email', password: 'secret123' } };
+    const req = { body: { name: 'Jane Doe', email: 'bad-email', phone: '0771234567', password: 'secret123' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await registerUser(req, res, next);
+    await registerUser(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
@@ -70,12 +81,23 @@ describe('auth.controller registerUser', () => {
     });
   });
 
-  it('rejects short passwords', async () => {
-    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', password: '123' } };
+  it('rejects invalid phone numbers', async () => {
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '123', password: 'secret123' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await registerUser(req, res, next);
+    await registerUser(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Phone number must be valid',
+    });
+  });
+
+  it('rejects short passwords', async () => {
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', password: '123' } };
+    const res = createRes();
+
+    await registerUser(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
@@ -85,11 +107,10 @@ describe('auth.controller registerUser', () => {
 
   it('returns 409 for duplicate email addresses', async () => {
     User.findOne.mockResolvedValue({ _id: 'existing-user' });
-    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', password: 'secret123' } };
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', password: 'secret123' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await registerUser(req, res, next);
+    await registerUser(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith({
@@ -105,7 +126,7 @@ describe('auth.controller registerUser', () => {
       email: 'patient@example.com',
       role: 'patient',
       doctorProfileId: null,
-      phone: null,
+      phone: '+94771234567',
       address: null,
       profileImage: null,
     });
@@ -114,13 +135,13 @@ describe('auth.controller registerUser', () => {
       body: {
         name: '  Jane Doe  ',
         email: '  Patient@Example.com ',
+        phone: ' +94 77 123 4567 ',
         password: ' secret123 ',
       },
     };
     const res = createRes();
-    const next = jest.fn();
 
-    await registerUser(req, res, next);
+    await registerUser(req, res, jest.fn());
 
     expect(User.findOne).toHaveBeenCalledWith({ email: 'patient@example.com' });
     expect(bcrypt.genSalt).toHaveBeenCalledWith(10);
@@ -128,11 +149,134 @@ describe('auth.controller registerUser', () => {
     expect(User.create).toHaveBeenCalledWith({
       name: 'Jane Doe',
       email: 'patient@example.com',
+      phone: '+94771234567',
       password: 'hashed-password',
       role: 'patient',
     });
     expect(generateToken).toHaveBeenCalledWith('user-id');
     expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      token: 'token',
+      _id: 'user-id',
+      name: 'Jane Doe',
+      email: 'patient@example.com',
+      role: 'patient',
+      doctorProfileId: null,
+      phone: '+94771234567',
+      address: null,
+      profileImage: null,
+    });
+  });
+});
+
+describe('auth.controller loginUser', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('requires email and password', async () => {
+    const req = { body: { email: '', password: '' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Email and password are required',
+    });
+  });
+
+  it('rejects invalid email addresses', async () => {
+    const req = { body: { email: 'bad-email', password: 'secret123' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Email must be valid',
+    });
+    expect(User.findOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects short passwords', async () => {
+    const req = { body: { email: 'patient@example.com', password: '123' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Password must be at least 6 characters',
+    });
+    expect(User.findOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects inactive or missing users', async () => {
+    User.findOne.mockResolvedValue(null);
+    const req = { body: { email: 'patient@example.com', password: 'secret123' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(User.findOne).toHaveBeenCalledWith({
+      email: 'patient@example.com',
+      isActive: { $ne: false },
+    });
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid credentials',
+    });
+  });
+
+  it('rejects wrong passwords', async () => {
+    User.findOne.mockResolvedValue({
+      _id: 'user-id',
+      password: 'hashed-password',
+    });
+    bcrypt.compare.mockResolvedValue(false);
+    const req = { body: { email: 'patient@example.com', password: 'secret123' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(bcrypt.compare).toHaveBeenCalledWith('secret123', 'hashed-password');
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid credentials',
+    });
+  });
+
+  it('logs in with trimmed and normalized credentials', async () => {
+    User.findOne.mockResolvedValue({
+      _id: 'user-id',
+      name: 'Jane Doe',
+      email: 'patient@example.com',
+      password: 'hashed-password',
+      role: 'patient',
+      doctorProfileId: null,
+      phone: null,
+      address: null,
+      profileImage: null,
+    });
+    bcrypt.compare.mockResolvedValue(true);
+    const req = {
+      body: {
+        email: ' Patient@Example.com ',
+        password: ' secret123 ',
+      },
+    };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(User.findOne).toHaveBeenCalledWith({
+      email: 'patient@example.com',
+      isActive: { $ne: false },
+    });
+    expect(bcrypt.compare).toHaveBeenCalledWith('secret123', 'hashed-password');
+    expect(generateToken).toHaveBeenCalledWith('user-id');
+    expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       token: 'token',
       _id: 'user-id',
@@ -147,30 +291,35 @@ describe('auth.controller registerUser', () => {
   });
 });
 
-describe('auth.controller forgotPassword', () => {
+describe('auth.controller requestPasswordResetOtp', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.NODE_ENV = 'test';
   });
 
-  it('requires email and new password', async () => {
-    const req = { body: { email: '', password: '' } };
-    const res = createRes();
-    const next = jest.fn();
+  afterAll(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+  });
 
-    await forgotPassword(req, res, next);
+  it('requires email', async () => {
+    const req = { body: { email: '' } };
+    const res = createRes();
+
+    await requestPasswordResetOtp(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      message: 'Email and new password are required',
+      message: 'Email is required',
     });
   });
 
   it('rejects invalid email format', async () => {
-    const req = { body: { email: 'bad-email', password: 'secret123' } };
+    const req = { body: { email: 'bad-email' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await forgotPassword(req, res, next);
+    await requestPasswordResetOtp(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
@@ -178,26 +327,12 @@ describe('auth.controller forgotPassword', () => {
     });
   });
 
-  it('rejects short passwords', async () => {
-    const req = { body: { email: 'patient@example.com', password: '123' } };
-    const res = createRes();
-    const next = jest.fn();
-
-    await forgotPassword(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({
-      message: 'Password must be at least 6 characters',
-    });
-  });
-
   it('returns 404 when the account is not found', async () => {
     User.findOne.mockResolvedValue(null);
-    const req = { body: { email: 'patient@example.com', password: 'secret123' } };
+    const req = { body: { email: 'patient@example.com' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await forgotPassword(req, res, next);
+    await requestPasswordResetOtp(req, res, jest.fn());
 
     expect(User.findOne).toHaveBeenCalledWith({
       email: 'patient@example.com',
@@ -209,24 +344,115 @@ describe('auth.controller forgotPassword', () => {
     });
   });
 
-  it('updates the password for a matching active account', async () => {
+  it('stores a hashed OTP and returns the OTP in non-production', async () => {
     const user = {
-      password: 'old-password',
       save: jest.fn().mockResolvedValue(true),
+      resetPasswordOtpHash: null,
+      resetPasswordOtpExpiresAt: null,
     };
     User.findOne.mockResolvedValue(user);
-    const req = { body: { email: ' Patient@Example.com ', password: 'secret123' } };
+    const req = { body: { email: 'Patient@Example.com ' } };
     const res = createRes();
-    const next = jest.fn();
 
-    await forgotPassword(req, res, next);
+    await requestPasswordResetOtp(req, res, jest.fn());
+
+    expect(crypto.randomInt).toHaveBeenCalledWith(100000, 1000000);
+    expect(user.resetPasswordOtpHash).toBe('hashed-otp');
+    expect(user.resetPasswordOtpExpiresAt).toBeInstanceOf(Date);
+    expect(user.save).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'A 6-digit OTP has been generated. It expires in 10 minutes.',
+      otp: '123456',
+    });
+  });
+});
+
+describe('auth.controller resetPasswordWithOtp', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('requires email, OTP, and new password', async () => {
+    const req = { body: { email: '', otp: '', password: '' } };
+    const res = createRes();
+
+    await resetPasswordWithOtp(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Email, OTP, and new password are required',
+    });
+  });
+
+  it('rejects invalid OTP format', async () => {
+    const req = { body: { email: 'patient@example.com', otp: '12', password: 'secret123' } };
+    const res = createRes();
+
+    await resetPasswordWithOtp(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'OTP must be a 6-digit code',
+    });
+  });
+
+  it('returns 404 when the account is not found', async () => {
+    User.findOne.mockResolvedValue(null);
+    const req = { body: { email: 'patient@example.com', otp: '123456', password: 'secret123' } };
+    const res = createRes();
+
+    await resetPasswordWithOtp(req, res, jest.fn());
 
     expect(User.findOne).toHaveBeenCalledWith({
       email: 'patient@example.com',
       isActive: { $ne: false },
     });
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'No active account found for this email',
+    });
+  });
+
+  it('rejects invalid or expired OTP values', async () => {
+    User.findOne.mockResolvedValue({
+      resetPasswordOtpHash: 'hashed-otp',
+      resetPasswordOtpExpiresAt: new Date(Date.now() - 1000),
+    });
+    const req = { body: { email: 'patient@example.com', otp: '123456', password: 'secret123' } };
+    const res = createRes();
+
+    await resetPasswordWithOtp(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'OTP is invalid or has expired',
+    });
+  });
+
+  it('updates the password and clears OTP fields for a valid OTP', async () => {
+    const user = {
+      password: 'old-password',
+      resetPasswordOtpHash: 'hashed-otp',
+      resetPasswordOtpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      save: jest.fn().mockResolvedValue(true),
+    };
+    User.findOne.mockResolvedValue(user);
+    const req = {
+      body: {
+        email: ' Patient@Example.com ',
+        otp: '123456',
+        password: ' secret123 ',
+      },
+    };
+    const res = createRes();
+
+    await resetPasswordWithOtp(req, res, jest.fn());
+
     expect(bcrypt.hash).toHaveBeenCalledWith('secret123', 10);
     expect(user.password).toBe('hashed-password');
+    expect(user.resetPasswordOtpHash).toBe(null);
+    expect(user.resetPasswordOtpExpiresAt).toBe(null);
     expect(user.save).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
