@@ -5,10 +5,12 @@ import {
   getRegisterValidationErrors,
   normalizeEmail,
   normalizeName,
+  normalizePhone,
   normalizePassword,
   validateEmail,
   validateOtp,
   validatePassword,
+  validatePhone,
 } from '../utils/validators';
 
 describe('mobile-app utils/validators', () => {
@@ -31,9 +33,16 @@ describe('mobile-app utils/validators', () => {
     expect(validateOtp('12a456')).toBe(false);
   });
 
+  it('validatePhone accepts 10-15 digit phone numbers', () => {
+    expect(validatePhone('0771234567')).toBe(true);
+    expect(validatePhone('+94771234567')).toBe(true);
+    expect(validatePhone('12345')).toBe(false);
+  });
+
   it('normalizes login fields before validation', () => {
     expect(normalizeEmail('  TEST@Example.com ')).toBe('test@example.com');
     expect(normalizeName('  Jane Doe  ')).toBe('Jane Doe');
+    expect(normalizePhone('  +94 77 123 4567 ')).toBe('+94771234567');
     expect(normalizePassword('  secret123  ')).toBe('secret123');
   });
 
@@ -91,11 +100,13 @@ describe('mobile-app utils/validators', () => {
     expect(getRegisterValidationErrors({
       name: ' ',
       email: 'bad-email',
+      phone: '123',
       password: '123',
       confirmPassword: '456',
     })).toEqual({
       name: 'Full name is required.',
       email: 'Enter a valid email address.',
+      phone: 'Enter a valid phone number.',
       password: 'Password must be at least 6 characters.',
       confirmPassword: 'Passwords do not match.',
     });
@@ -105,6 +116,7 @@ describe('mobile-app utils/validators', () => {
     expect(getRegisterValidationErrors({
       name: 'Jane Doe',
       email: 'patient@example.com',
+      phone: '0771234567',
       password: 'secret123',
       confirmPassword: 'secret123',
     })).toEqual({});

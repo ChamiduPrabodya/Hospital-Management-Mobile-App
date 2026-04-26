@@ -6,6 +6,8 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email));
 const isValidOtp = (otp) => /^\d{6}$/.test(String(otp));
+const normalizePhone = (phone = '') => String(phone).replace(/[^\d+]/g, '').trim();
+const isValidPhone = (phone) => /^\+?\d{10,15}$/.test(normalizePhone(phone));
 const OTP_EXPIRY_MINUTES = 10;
 const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest('hex');
 const buildAuthPayload = (user, token) => ({
@@ -23,10 +25,11 @@ const buildAuthPayload = (user, token) => ({
 exports.registerUser = asyncHandler(async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
+  const phone = normalizePhone(req.body.phone || '');
   const password = String(req.body.password || '').trim();
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Name, email, and password are required' });
+  if (!name || !email || !phone || !password) {
+    return res.status(400).json({ message: 'Name, email, phone, and password are required' });
   }
 
   if (name.length < 2) {
@@ -35,6 +38,10 @@ exports.registerUser = asyncHandler(async (req, res) => {
 
   if (!isValidEmail(email)) {
     return res.status(400).json({ message: 'Email must be valid' });
+  }
+
+  if (!isValidPhone(phone)) {
+    return res.status(400).json({ message: 'Phone number must be valid' });
   }
 
   if (password.length < 6) {
@@ -61,6 +68,7 @@ exports.registerUser = asyncHandler(async (req, res) => {
   const user = await User.create({
     name,
     email,
+    phone,
     password: hashedPassword,
     role,
   });

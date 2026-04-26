@@ -11,6 +11,7 @@ import {
   getRegisterValidationErrors,
   normalizeEmail,
   normalizeName,
+  normalizePhone,
   normalizePassword,
 } from '../../utils/validators';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
@@ -18,6 +19,7 @@ import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
@@ -49,29 +51,34 @@ const RegisterScreen = ({ navigation }) => {
 
   const handleNameChange = (value) => {
     setName(value);
-    updateFieldError('name', { name: value, email, password, confirmPassword });
+    updateFieldError('name', { name: value, email, phone, password, confirmPassword });
   };
 
   const handleEmailChange = (value) => {
     setEmail(value);
-    updateFieldError('email', { name, email: value, password, confirmPassword });
+    updateFieldError('email', { name, email: value, phone, password, confirmPassword });
+  };
+
+  const handlePhoneChange = (value) => {
+    setPhone(value);
+    updateFieldError('phone', { name, email, phone: value, password, confirmPassword });
   };
 
   const handlePasswordChange = (value) => {
     setPassword(value);
-    const nextValues = { name, email, password: value, confirmPassword };
+    const nextValues = { name, email, phone, password: value, confirmPassword };
     updateFieldError('password', nextValues);
     updateFieldError('confirmPassword', nextValues);
   };
 
   const handleConfirmPasswordChange = (value) => {
     setConfirmPassword(value);
-    updateFieldError('confirmPassword', { name, email, password, confirmPassword: value });
+    updateFieldError('confirmPassword', { name, email, phone, password, confirmPassword: value });
   };
 
   const handleFieldBlur = (field) => {
     setTouched((current) => ({ ...current, [field]: true }));
-    const nextErrors = getRegisterValidationErrors({ name, email, password, confirmPassword });
+    const nextErrors = getRegisterValidationErrors({ name, email, phone, password, confirmPassword });
     setErrors((current) => ({
       ...current,
       [field]: nextErrors[field],
@@ -81,10 +88,12 @@ const RegisterScreen = ({ navigation }) => {
   const handleRegister = async () => {
     const normalizedName = normalizeName(name);
     const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = normalizePhone(phone);
     const normalizedPassword = normalizePassword(password);
     const validationErrors = getRegisterValidationErrors({
       name: normalizedName,
       email: normalizedEmail,
+      phone: normalizedPhone,
       password: normalizedPassword,
       confirmPassword,
     });
@@ -94,6 +103,7 @@ const RegisterScreen = ({ navigation }) => {
       setTouched({
         name: true,
         email: true,
+        phone: true,
         password: true,
         confirmPassword: true,
       });
@@ -102,7 +112,7 @@ const RegisterScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      await register(normalizedName, normalizedEmail, normalizedPassword);
+      await register(normalizedName, normalizedEmail, normalizedPhone, normalizedPassword);
     } catch (error) {
       Alert.alert('Registration Failed', error.response?.data?.message || 'Please try again.');
     } finally {
@@ -155,6 +165,17 @@ const RegisterScreen = ({ navigation }) => {
             autoComplete="email"
             textContentType="emailAddress"
             errorMessage={errors.email}
+          />
+          <CustomInput
+            label="Phone Number"
+            value={phone}
+            onChangeText={handlePhoneChange}
+            onBlur={() => handleFieldBlur('phone')}
+            placeholder="0771234567"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            textContentType="telephoneNumber"
+            errorMessage={errors.phone}
           />
           <CustomInput
             label="Password"
