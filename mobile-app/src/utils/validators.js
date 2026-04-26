@@ -13,6 +13,8 @@ export const validatePassword = (password) => {
   return normalizePassword(password).length >= 6;
 };
 
+export const validateOtp = (otp) => /^\d{6}$/.test(String(otp).trim());
+
 export const getLoginValidationErrors = ({ email, password }) => {
   const errors = {};
   const normalizedEmail = normalizeEmail(email);
@@ -33,9 +35,23 @@ export const getLoginValidationErrors = ({ email, password }) => {
   return errors;
 };
 
-export const getForgotPasswordValidationErrors = ({ email, password, confirmPassword }) => {
+export const getForgotPasswordRequestErrors = ({ email }) => {
   const errors = {};
   const normalizedEmail = normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    errors.email = 'Email is required.';
+  } else if (!validateEmail(normalizedEmail)) {
+    errors.email = 'Enter a valid email address.';
+  }
+
+  return errors;
+};
+
+export const getForgotPasswordResetErrors = ({ email, otp, password, confirmPassword }) => {
+  const errors = {};
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedOtp = String(otp || '').trim();
   const normalizedPassword = normalizePassword(password);
   const normalizedConfirmPassword = normalizePassword(confirmPassword);
 
@@ -43,6 +59,12 @@ export const getForgotPasswordValidationErrors = ({ email, password, confirmPass
     errors.email = 'Email is required.';
   } else if (!validateEmail(normalizedEmail)) {
     errors.email = 'Enter a valid email address.';
+  }
+
+  if (!normalizedOtp) {
+    errors.otp = 'OTP is required.';
+  } else if (!validateOtp(normalizedOtp)) {
+    errors.otp = 'Enter the 6-digit OTP.';
   }
 
   if (!normalizedPassword) {

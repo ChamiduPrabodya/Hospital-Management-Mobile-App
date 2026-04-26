@@ -1,9 +1,24 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/user.model');
 const generateToken = require('../utils/generateToken');
 const asyncHandler = require('../utils/asyncHandler');
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email));
+const isValidOtp = (otp) => /^\d{6}$/.test(String(otp));
+const OTP_EXPIRY_MINUTES = 10;
+const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest('hex');
+const buildAuthPayload = (user, token) => ({
+  token,
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  doctorProfileId: user.doctorProfileId,
+  phone: user.phone,
+  address: user.address,
+  profileImage: user.profileImage,
+});
 
 exports.registerUser = asyncHandler(async (req, res) => {
   const name = String(req.body.name || '').trim();
@@ -52,17 +67,7 @@ exports.registerUser = asyncHandler(async (req, res) => {
 
   const token = generateToken(user._id);
 
-  res.status(201).json({
-    token,
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    doctorProfileId: user.doctorProfileId,
-    phone: user.phone,
-    address: user.address,
-    profileImage: user.profileImage,
-  });
+  res.status(201).json(buildAuthPayload(user, token));
 });
 
 exports.loginUser = asyncHandler(async (req, res) => {
@@ -71,6 +76,14 @@ exports.loginUser = asyncHandler(async (req, res) => {
 
   if (!email || !password) {
     return res.status(400).json({ message: 'Email and password are required' });
+  }
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ message: 'Email must be valid' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
   }
 
   const user = await User.findOne({ email, isActive: { $ne: false } });
@@ -85,29 +98,56 @@ exports.loginUser = asyncHandler(async (req, res) => {
 
   const token = generateToken(user._id);
 
-  res.status(200).json({
-    token,
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    doctorProfileId: user.doctorProfileId,
-    phone: user.phone,
-    address: user.address,
-    profileImage: user.profileImage,
-  });
+  res.status(200).json(buildAuthPayload(user, token));
 });
 
-exports.forgotPassword = asyncHandler(async (req, res) => {
+exports.requestPasswordResetOtp = asyncHandler(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
-  const password = String(req.body.password || '').trim();
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and new password are required' });
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
   }
 
   if (!isValidEmail(email)) {
     return res.status(400).json({ message: 'Email must be valid' });
+  }
+
+  const user = await User.findOne({ email, isActive: { $ne: false } });
+  if (!user) {
+    return res.status(404).json({ message: 'No active account found for this email' });
+  }
+
+  const otp = String(crypto.randomInt(100000, 1000000));
+  user.resetPasswordOtpHash = hashOtp(otp);
+  user.resetPasswordOtpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+  await user.save();
+
+  const response = {
+    message: `A 6-digit OTP has been generated. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
+  };
+
+  if (process.env.NODE_ENV !== 'production') {
+    response.otp = otp;
+  }
+
+  return res.status(200).json(response);
+});
+
+exports.resetPasswordWithOtp = asyncHandler(async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const otp = String(req.body.otp || '').trim();
+  const password = String(req.body.password || '').trim();
+
+  if (!email || !otp || !password) {
+    return res.status(400).json({ message: 'Email, OTP, and new password are required' });
+  }
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ message: 'Email must be valid' });
+  }
+
+  if (!isValidOtp(otp)) {
+    return res.status(400).json({ message: 'OTP must be a 6-digit code' });
   }
 
   if (password.length < 6) {
@@ -119,7 +159,16 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'No active account found for this email' });
   }
 
+  const otpExpired = !user.resetPasswordOtpExpiresAt || user.resetPasswordOtpExpiresAt.getTime() < Date.now();
+  const otpMismatch = !user.resetPasswordOtpHash || user.resetPasswordOtpHash !== hashOtp(otp);
+
+  if (otpExpired || otpMismatch) {
+    return res.status(400).json({ message: 'OTP is invalid or has expired' });
+  }
+
   user.password = await bcrypt.hash(password, 10);
+  user.resetPasswordOtpHash = null;
+  user.resetPasswordOtpExpiresAt = null;
   await user.save();
 
   return res.status(200).json({ message: 'Password reset successful. You can now sign in.' });

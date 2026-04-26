@@ -1,11 +1,13 @@
 import {
-  getForgotPasswordValidationErrors,
+  getForgotPasswordRequestErrors,
+  getForgotPasswordResetErrors,
   getLoginValidationErrors,
   getRegisterValidationErrors,
   normalizeEmail,
   normalizeName,
   normalizePassword,
   validateEmail,
+  validateOtp,
   validatePassword,
 } from '../utils/validators';
 
@@ -21,6 +23,12 @@ describe('mobile-app utils/validators', () => {
   it('validatePassword requires at least 6 characters', () => {
     expect(validatePassword('12345')).toBe(false);
     expect(validatePassword('123456')).toBe(true);
+  });
+
+  it('validateOtp requires exactly 6 digits', () => {
+    expect(validateOtp('12345')).toBe(false);
+    expect(validateOtp('123456')).toBe(true);
+    expect(validateOtp('12a456')).toBe(false);
   });
 
   it('normalizes login fields before validation', () => {
@@ -48,21 +56,32 @@ describe('mobile-app utils/validators', () => {
     })).toEqual({});
   });
 
-  it('returns field errors for forgot password input', () => {
-    expect(getForgotPasswordValidationErrors({
+  it('returns field errors for forgot password OTP request input', () => {
+    expect(getForgotPasswordRequestErrors({
       email: 'bad-email',
+    })).toEqual({
+      email: 'Enter a valid email address.',
+    });
+  });
+
+  it('returns field errors for forgot password reset input', () => {
+    expect(getForgotPasswordResetErrors({
+      email: 'bad-email',
+      otp: '123',
       password: '123',
       confirmPassword: '456',
     })).toEqual({
       email: 'Enter a valid email address.',
+      otp: 'Enter the 6-digit OTP.',
       password: 'Password must be at least 6 characters.',
       confirmPassword: 'Passwords do not match.',
     });
   });
 
-  it('accepts valid forgot password input', () => {
-    expect(getForgotPasswordValidationErrors({
+  it('accepts valid forgot password reset input', () => {
+    expect(getForgotPasswordResetErrors({
       email: 'patient@example.com',
+      otp: '123456',
       password: 'secret123',
       confirmPassword: 'secret123',
     })).toEqual({});

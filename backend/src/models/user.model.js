@@ -34,6 +34,14 @@ const userSchema = new mongoose.Schema(
         profileImage: {
             type: String
         },
+        resetPasswordOtpHash: {
+            type: String,
+            default: null
+        },
+        resetPasswordOtpExpiresAt: {
+            type: Date,
+            default: null
+        },
         isActive: {
             type: Boolean,
             default: true
