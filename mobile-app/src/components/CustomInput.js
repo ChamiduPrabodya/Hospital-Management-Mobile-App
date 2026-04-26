@@ -13,17 +13,23 @@ const CustomInput = ({
   numberOfLines,
   style,
   editable = true,
+  autoCapitalize = 'none',
+  autoComplete,
+  textContentType,
+  errorMessage,
+  onBlur: onBlurProp,
 }) => {
   const [focused, setFocused] = useState(false);
   const borderAnim = useRef(new Animated.Value(0)).current;
 
-  const onFocus = () => {
+  const handleFocus = () => {
     setFocused(true);
     Animated.timing(borderAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
   };
-  const onBlur = () => {
+  const handleBlur = () => {
     setFocused(false);
     Animated.timing(borderAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+    onBlurProp?.();
   };
 
   const borderColor = borderAnim.interpolate({
@@ -34,7 +40,7 @@ const CustomInput = ({
   return (
     <View style={[styles.group, style]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <Animated.View style={[styles.inputWrap, { borderColor }]}>
+      <Animated.View style={[styles.inputWrap, errorMessage ? styles.inputWrapError : { borderColor }]}>
         <TextInput
           style={[styles.input, multiline && styles.inputMulti]}
           value={value}
@@ -46,11 +52,14 @@ const CustomInput = ({
           multiline={multiline}
           numberOfLines={numberOfLines}
           editable={editable}
-          autoCapitalize="none"
-          onFocus={onFocus}
-          onBlur={onBlur}
+          autoCapitalize={autoCapitalize}
+          autoComplete={autoComplete}
+          textContentType={textContentType}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
         />
       </Animated.View>
+      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
     </View>
   );
 };
@@ -72,6 +81,9 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     backgroundColor: COLORS.inputBg,
   },
+  inputWrapError: {
+    borderColor: COLORS.danger,
+  },
   input: {
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -82,6 +94,12 @@ const styles = StyleSheet.create({
   inputMulti: {
     textAlignVertical: 'top',
     minHeight: 90,
+  },
+  errorText: {
+    marginTop: 6,
+    marginLeft: 4,
+    fontSize: 12,
+    color: COLORS.danger,
   },
 });
 

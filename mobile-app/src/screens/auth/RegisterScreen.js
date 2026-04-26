@@ -7,12 +7,21 @@ import { AuthContext } from '../../context/AuthContext';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import {
+  getRegisterValidationErrors,
+  normalizeEmail,
+  normalizeName,
+  normalizePassword,
+} from '../../utils/validators';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
 const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
 
@@ -26,14 +35,74 @@ const RegisterScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-  const handleRegister = async () => {
-    if (!name || !email || !password) {
-      Alert.alert('Missing Fields', 'Please fill in all fields to continue.');
+  const updateFieldError = (field, nextValues) => {
+    if (!touched[field] && !errors[field]) {
       return;
     }
+
+    const nextErrors = getRegisterValidationErrors(nextValues);
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  };
+
+  const handleNameChange = (value) => {
+    setName(value);
+    updateFieldError('name', { name: value, email, password, confirmPassword });
+  };
+
+  const handleEmailChange = (value) => {
+    setEmail(value);
+    updateFieldError('email', { name, email: value, password, confirmPassword });
+  };
+
+  const handlePasswordChange = (value) => {
+    setPassword(value);
+    const nextValues = { name, email, password: value, confirmPassword };
+    updateFieldError('password', nextValues);
+    updateFieldError('confirmPassword', nextValues);
+  };
+
+  const handleConfirmPasswordChange = (value) => {
+    setConfirmPassword(value);
+    updateFieldError('confirmPassword', { name, email, password, confirmPassword: value });
+  };
+
+  const handleFieldBlur = (field) => {
+    setTouched((current) => ({ ...current, [field]: true }));
+    const nextErrors = getRegisterValidationErrors({ name, email, password, confirmPassword });
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  };
+
+  const handleRegister = async () => {
+    const normalizedName = normalizeName(name);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = normalizePassword(password);
+    const validationErrors = getRegisterValidationErrors({
+      name: normalizedName,
+      email: normalizedEmail,
+      password: normalizedPassword,
+      confirmPassword,
+    });
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setTouched({
+        name: true,
+        email: true,
+        password: true,
+        confirmPassword: true,
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      await register(name, email, password);
+      await register(normalizedName, normalizedEmail, normalizedPassword);
     } catch (error) {
       Alert.alert('Registration Failed', error.response?.data?.message || 'Please try again.');
     } finally {
@@ -65,9 +134,50 @@ const RegisterScreen = ({ navigation }) => {
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Text style={styles.sectionLabel}>PERSONAL DETAILS</Text>
 
-          <CustomInput label="Full Name" value={name} onChangeText={setName} placeholder="Dr. / Mr. / Ms. Full Name" />
-          <CustomInput label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-          <CustomInput label="Password" value={password} onChangeText={setPassword} placeholder="Create a strong password" secureTextEntry />
+          <CustomInput
+            label="Full Name"
+            value={name}
+            onChangeText={handleNameChange}
+            onBlur={() => handleFieldBlur('name')}
+            placeholder="Dr. / Mr. / Ms. Full Name"
+            autoCapitalize="words"
+            autoComplete="name"
+            textContentType="name"
+            errorMessage={errors.name}
+          />
+          <CustomInput
+            label="Email Address"
+            value={email}
+            onChangeText={handleEmailChange}
+            onBlur={() => handleFieldBlur('email')}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            errorMessage={errors.email}
+          />
+          <CustomInput
+            label="Password"
+            value={password}
+            onChangeText={handlePasswordChange}
+            onBlur={() => handleFieldBlur('password')}
+            placeholder="Create a password with at least 6 characters"
+            secureTextEntry
+            autoComplete="new-password"
+            textContentType="newPassword"
+            errorMessage={errors.password}
+          />
+          <CustomInput
+            label="Confirm Password"
+            value={confirmPassword}
+            onChangeText={handleConfirmPasswordChange}
+            onBlur={() => handleFieldBlur('confirmPassword')}
+            placeholder="Re-enter your password"
+            secureTextEntry
+            autoComplete="new-password"
+            textContentType="password"
+            errorMessage={errors.confirmPassword}
+          />
 
           <CustomButton title="Create Account" onPress={handleRegister} style={styles.btn} />
 
