@@ -14,6 +14,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
+import {
+  getLoginValidationErrors,
+  normalizeEmail,
+  normalizePassword,
+} from '../../utils/validators';
 
 const { width, height } = Dimensions.get('window');
 
@@ -34,6 +39,9 @@ const COLORS = {
   inputBg: '#f7fbfd',
   inputBorder: '#d8e8f0',
   inputBorderFocus: '#1a8cb5',
+  inputBorderError: '#d64545',
+  errorBg: '#fff5f5',
+  errorText: '#c53030',
   divider: '#eef4f8',
   labelColor: '#4a6170',
   link: '#0d6b99',
@@ -84,6 +92,8 @@ const HospitalInput = ({
   autoComplete,
   rightActionLabel,
   onRightActionPress,
+  errorMessage,
+  onBlur,
 }) => {
   const [focused, setFocused] = useState(false);
   const borderAnim = useRef(new Animated.Value(0)).current;
@@ -104,6 +114,7 @@ const HospitalInput = ({
       duration: 200,
       useNativeDriver: false,
     }).start();
+    onBlur?.();
   };
 
   const borderColor = borderAnim.interpolate({
@@ -122,7 +133,9 @@ const HospitalInput = ({
       <Animated.View
         style={[
           inputStyles.wrapper,
-          { borderColor, backgroundColor: bgColor },
+          errorMessage
+            ? inputStyles.wrapperError
+            : { borderColor, backgroundColor: bgColor },
         ]}
       >
         <View style={inputStyles.iconSlot}>{icon}</View>
@@ -151,6 +164,7 @@ const HospitalInput = ({
           </TouchableOpacity>
         ) : null}
       </Animated.View>
+      {errorMessage ? <Text style={inputStyles.errorText}>{errorMessage}</Text> : null}
     </View>
   );
 };
@@ -159,6 +173,8 @@ const HospitalInput = ({
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
@@ -189,14 +205,56 @@ const LoginScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
-  const handleLogin = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedPassword = password.trim();
-
-    if (!normalizedEmail || !normalizedPassword) {
-      Alert.alert('Missing Fields', 'Please enter your email and password.');
+  const updateFieldError = (field, nextEmail, nextPassword) => {
+    if (!touched[field] && !errors[field]) {
       return;
     }
+
+    const nextErrors = getLoginValidationErrors({
+      email: nextEmail,
+      password: nextPassword,
+    });
+
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  };
+
+  const handleEmailChange = (value) => {
+    setEmail(value);
+    updateFieldError('email', value, password);
+  };
+
+  const handlePasswordChange = (value) => {
+    setPassword(value);
+    updateFieldError('password', email, value);
+  };
+
+  const handleFieldBlur = (field) => {
+    setTouched((current) => ({ ...current, [field]: true }));
+
+    const nextErrors = getLoginValidationErrors({ email, password });
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  };
+
+  const handleLogin = async () => {
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = normalizePassword(password);
+    const validationErrors = getLoginValidationErrors({
+      email: normalizedEmail,
+      password: normalizedPassword,
+    });
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setTouched({ email: true, password: true });
+      return;
+    }
+
     // Button press animation
     Animated.sequence([
       Animated.timing(btnScale, { toValue: 0.97, duration: 80, useNativeDriver: true }),
@@ -287,11 +345,13 @@ const LoginScreen = ({ navigation }) => {
             <HospitalInput
               label="EMAIL ADDRESS"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
               placeholder="you@example.com"
               keyboardType="email-address"
               textContentType="emailAddress"
               autoComplete="email"
+              errorMessage={errors.email}
+              onBlur={() => handleFieldBlur('email')}
               icon={
                 <View style={miniIconStyles.mail}>
                   <View style={miniIconStyles.mailRect} />
@@ -304,13 +364,15 @@ const LoginScreen = ({ navigation }) => {
             <HospitalInput
               label="PASSWORD"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={handlePasswordChange}
               placeholder="Enter your password"
               secureTextEntry={!passwordVisible}
               textContentType="password"
               autoComplete="password"
               rightActionLabel={passwordVisible ? 'Hide' : 'Show'}
               onRightActionPress={() => setPasswordVisible((current) => !current)}
+              errorMessage={errors.password}
+              onBlur={() => handleFieldBlur('password')}
               icon={
                 <View style={miniIconStyles.lock}>
                   <View style={miniIconStyles.lockArc} />
@@ -584,6 +646,17 @@ const inputStyles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 10,
   },
+  wrapperError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 50,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    gap: 10,
+    borderColor: COLORS.inputBorderError,
+    backgroundColor: COLORS.errorBg,
+  },
   iconSlot: {
     width: 20,
     alignItems: 'center',
@@ -604,6 +677,11 @@ const inputStyles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.link,
     letterSpacing: 0.3,
+  },
+  errorText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: COLORS.errorText,
   },
 });
 
