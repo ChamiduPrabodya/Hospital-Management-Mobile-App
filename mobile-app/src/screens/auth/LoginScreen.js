@@ -437,7 +437,7 @@ const LoginScreen = ({ navigation, route }) => {
                 <View style={styles.shieldOuter} />
               </View>
               <Text style={styles.securityText}>
-                Nadeesha D Shalom - SLIIT WMT 2026
+                CHAMIDU PRABODYA - SLIIT WMT 2026
               </Text>
             </View>
           </Animated.View>

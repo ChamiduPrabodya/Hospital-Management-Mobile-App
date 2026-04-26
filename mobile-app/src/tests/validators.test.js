@@ -1,7 +1,9 @@
 import {
   getForgotPasswordValidationErrors,
   getLoginValidationErrors,
+  getRegisterValidationErrors,
   normalizeEmail,
+  normalizeName,
   normalizePassword,
   validateEmail,
   validatePassword,
@@ -23,6 +25,7 @@ describe('mobile-app utils/validators', () => {
 
   it('normalizes login fields before validation', () => {
     expect(normalizeEmail('  TEST@Example.com ')).toBe('test@example.com');
+    expect(normalizeName('  Jane Doe  ')).toBe('Jane Doe');
     expect(normalizePassword('  secret123  ')).toBe('secret123');
   });
 
@@ -59,6 +62,29 @@ describe('mobile-app utils/validators', () => {
 
   it('accepts valid forgot password input', () => {
     expect(getForgotPasswordValidationErrors({
+      email: 'patient@example.com',
+      password: 'secret123',
+      confirmPassword: 'secret123',
+    })).toEqual({});
+  });
+
+  it('returns field errors for invalid register input', () => {
+    expect(getRegisterValidationErrors({
+      name: ' ',
+      email: 'bad-email',
+      password: '123',
+      confirmPassword: '456',
+    })).toEqual({
+      name: 'Full name is required.',
+      email: 'Enter a valid email address.',
+      password: 'Password must be at least 6 characters.',
+      confirmPassword: 'Passwords do not match.',
+    });
+  });
+
+  it('accepts valid register input', () => {
+    expect(getRegisterValidationErrors({
+      name: 'Jane Doe',
       email: 'patient@example.com',
       password: 'secret123',
       confirmPassword: 'secret123',
