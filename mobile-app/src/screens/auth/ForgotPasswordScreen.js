@@ -18,6 +18,7 @@ import {
   resetPasswordWithOtpApi,
 } from '../../api/authApi';
 import {
+  getPasswordStrength,
   getForgotPasswordRequestErrors,
   getForgotPasswordResetErrors,
   normalizeEmail,
@@ -43,6 +44,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
     password,
     confirmPassword,
   }), [confirmPassword, email, otp, password]);
+  const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
 
   const handleRequestOtp = async () => {
     setSubmittedRequest(true);
@@ -172,10 +174,11 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 label="New Password"
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Enter a new password"
+                placeholder="Use 8+ chars with upper, lower, number, symbol"
                 secureTextEntry
                 autoComplete="new-password"
                 textContentType="newPassword"
+                passwordStrength={passwordStrength}
                 errorMessage={submittedReset ? resetErrors.password : ''}
               />
 
