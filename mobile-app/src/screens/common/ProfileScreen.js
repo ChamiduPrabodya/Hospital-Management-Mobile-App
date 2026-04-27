@@ -44,7 +44,7 @@ const ProfileScreen = () => {
   const isDoctor = userInfo?.role === 'doctor';
   const doctorProfileId = userInfo?.doctorProfileId?._id || userInfo?.doctorProfileId;
   const displayName = doctorProfile?.name || name;
-  const profileImage = isDoctor ? doctorProfile?.image : userInfo?.profileImage;
+  const profileImage = userInfo?.profileImage || doctorProfile?.userId?.profileImage || doctorProfile?.image || null;
 
   const initials = displayName ? displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
 
@@ -81,38 +81,38 @@ const ProfileScreen = () => {
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission Required', 'Please allow photo access to choose a profile picture.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [ImagePicker.MediaType.Images],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled || !result.assets?.[0]?.uri) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    const uriParts = asset.uri.split('/');
-    const fallbackName = `user-${userInfo?._id || 'profile'}.jpg`;
-    const name = asset.fileName || uriParts[uriParts.length - 1] || fallbackName;
-    const extension = name.split('.').pop()?.toLowerCase();
-    const type = asset.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
-    const formData = new FormData();
-    formData.append('profileImage', {
-      uri: asset.uri,
-      name,
-      type,
-    });
-
-    setLoading(true);
     try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Please allow photo access to choose a profile picture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const uriParts = asset.uri.split('/');
+      const fallbackName = `user-${userInfo?._id || 'profile'}.jpg`;
+      const name = asset.fileName || uriParts[uriParts.length - 1] || fallbackName;
+      const extension = name.split('.').pop()?.toLowerCase();
+      const type = asset.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
+      const formData = new FormData();
+      formData.append('profileImage', {
+        uri: asset.uri,
+        name,
+        type,
+      });
+
+      setLoading(true);
       await updateProfileImage(formData);
       Alert.alert('Profile Picture Updated', 'Your profile picture has been updated successfully.');
     } catch (error) {
@@ -121,7 +121,7 @@ const ProfileScreen = () => {
         formatRequestErrorMessage(error, {
           timeout: 'Profile image upload timed out. Please try again.',
           network: 'Cannot reach the server right now. Please try again.',
-          default: 'Unable to upload your profile picture right now.',
+          default: error?.response?.data?.message || error?.message || 'Unable to upload your profile picture right now.',
         })
       );
     } finally {
@@ -201,13 +201,6 @@ const ProfileScreen = () => {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>CONTACT DETAILS</Text>
-        <View style={styles.detailCard}>
-          <DetailRow label="Phone" value={phone || 'Not provided'} />
-          <View style={styles.divider} />
-          <DetailRow label="Address" value={address || 'Not provided'} valueStyle={styles.detailValueLeft} />
-        </View>
-
         {isDoctor ? (
           <>
             <Text style={styles.sectionLabel}>PROFESSIONAL PROFILE</Text>

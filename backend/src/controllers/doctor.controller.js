@@ -58,6 +58,7 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     password: hashedPassword,
     role: 'doctor',
     doctorProfileId: doctor._id,
+    profileImage: image || null,
     isActive: true,
     deletedAt: null,
   });
@@ -69,14 +70,14 @@ exports.createDoctor = asyncHandler(async (req, res) => {
 });
 
 exports.getDoctors = asyncHandler(async (req, res) => {
-  const doctors = await Doctor.find({ isActive: { $ne: false } }).populate('userId', 'email role isActive');
+  const doctors = await Doctor.find({ isActive: { $ne: false } }).populate('userId', 'email role isActive profileImage');
   res.status(200).json(doctors);
 });
 
 exports.getDoctorById = asyncHandler(async (req, res) => {
   if (!validateObjectIdParam(res, req.params.id, 'doctor ID')) return;
 
-  const doctor = await Doctor.findOne({ _id: req.params.id, isActive: { $ne: false } }).populate('userId', 'email role isActive');
+  const doctor = await Doctor.findOne({ _id: req.params.id, isActive: { $ne: false } }).populate('userId', 'email role isActive profileImage');
   if (!doctor) {
     return res.status(404).json({ message: 'Doctor not found' });
   }
@@ -126,6 +127,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
     }
 
     if (req.body.name !== undefined) user.name = req.body.name;
+    if (req.body.image !== undefined) user.profileImage = req.body.image;
 
     if (req.body.email !== undefined) {
       const normalizedEmail = String(req.body.email || '').trim().toLowerCase();
@@ -157,7 +159,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
     }
   }
 
-  const populatedDoctor = await Doctor.findById(doctor._id).populate('userId', 'email role isActive');
+  const populatedDoctor = await Doctor.findById(doctor._id).populate('userId', 'email role isActive profileImage');
   res.status(200).json(populatedDoctor);
 });
 

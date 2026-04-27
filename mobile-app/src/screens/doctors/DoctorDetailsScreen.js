@@ -4,6 +4,7 @@ import CustomButton from '../../components/CustomButton';
 
 const DoctorDetailsScreen = ({ route, navigation }) => {
   const { doctor } = route.params;
+  const imageUri = doctor?.userId?.profileImage || doctor?.image;
   const consultationFee = doctor?.consultationFee !== undefined && doctor?.consultationFee !== null
     ? `LKR ${Number(doctor.consultationFee).toLocaleString()}`
     : 'N/A';
@@ -11,8 +12,8 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerCard}>
-        {doctor?.image ? (
-          <Image source={{ uri: doctor.image }} style={styles.doctorImage} resizeMode="cover" />
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.doctorImage} resizeMode="cover" />
         ) : (
           <View style={styles.imagePlaceholder}>
             <Text style={styles.imagePlaceholderText}>{doctor?.name?.charAt(0)?.toUpperCase() || 'D'}</Text>

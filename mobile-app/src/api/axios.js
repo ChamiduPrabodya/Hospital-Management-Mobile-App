@@ -7,13 +7,22 @@ const instance = axios.create({
   timeout: 10000,
   headers: {
     Accept: 'application/json',
-    'Content-Type': 'application/json',
   },
 });
 
 instance.interceptors.request.use(
   async (config) => {
     config.headers = config.headers || {};
+    const isFormData =
+      (typeof FormData !== 'undefined' && config.data instanceof FormData) ||
+      (config.data && typeof config.data === 'object' && typeof config.data.append === 'function');
+
+    if (isFormData) {
+      delete config.headers['Content-Type'];
+    } else if (!config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+
     const token = await AsyncStorage.getItem('userToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

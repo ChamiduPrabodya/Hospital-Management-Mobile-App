@@ -33,7 +33,16 @@ exports.uploadDoctorImage = asyncHandler(async (req, res) => {
   doctor.image = imageUrl;
   await doctor.save();
 
-  res.status(200).json({ imageUrl, doctor });
+  const linkedUser = doctor.userId
+    ? await User.findById(doctor.userId).select('-password')
+    : await User.findOne({ doctorProfileId: doctor._id, role: 'doctor' }).select('-password');
+
+  if (linkedUser) {
+    linkedUser.profileImage = imageUrl;
+    await linkedUser.save();
+  }
+
+  res.status(200).json({ imageUrl, doctor, user: linkedUser });
 });
 
 exports.uploadUserProfileImage = asyncHandler(async (req, res) => {
