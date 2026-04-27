@@ -27,26 +27,17 @@ const buildAuthPayload = (user, token) => ({
 });
 
 exports.registerUser = asyncHandler(async (req, res) => {
-  const name = String(req.body.name || '').trim();
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const phone = normalizePhone(req.body.phone || '');
-  const address = String(req.body.address || '').trim();
+  const profileInput = normalizeUserProfilePayload(req.body);
+  const { name, email, phone, address } = profileInput;
   const password = String(req.body.password || '').trim();
 
   if (!name || !email || !phone || !address || !password) {
     return res.status(400).json({ message: 'Name, email, phone, address, and password are required' });
   }
 
-  if (name.length < 2) {
-    return res.status(400).json({ message: 'Name must be at least 2 characters' });
-  }
-
-  if (!isValidEmail(email)) {
-    return res.status(400).json({ message: 'Email must be valid' });
-  }
-
-  if (!isValidPhone(phone)) {
-    return res.status(400).json({ message: 'Phone number must be valid' });
+  const validationMessage = validateUserProfilePayload(profileInput);
+  if (validationMessage) {
+    return res.status(400).json({ message: validationMessage });
   }
 
   if (password.length < 6) {

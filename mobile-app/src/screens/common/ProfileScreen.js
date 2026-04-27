@@ -12,6 +12,7 @@ import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {
   getProfileValidationErrors,
+  normalizeAddress,
   normalizeEmail,
   normalizeName,
   normalizePhone,
@@ -39,6 +40,7 @@ const ProfileScreen = () => {
   const [phone,   setPhone]   = useState(userInfo?.phone   || '');
   const [address, setAddress] = useState(userInfo?.address || '');
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const isDoctor = userInfo?.role === 'doctor';
@@ -54,6 +56,8 @@ const ProfileScreen = () => {
       setEmail(userInfo?.email || '');
       setPhone(userInfo?.phone || '');
       setAddress(userInfo?.address || '');
+      setErrors({});
+      setTouched({});
     }, [userInfo?.address, userInfo?.email, userInfo?.name, userInfo?.phone])
   );
 
@@ -74,6 +78,42 @@ const ProfileScreen = () => {
       loadDoctorProfile();
     }, [loadDoctorProfile])
   );
+
+  const updateFieldError = useCallback((field, nextValues) => {
+    if (!touched[field] && !errors[field]) {
+      return;
+    }
+
+    const nextErrors = getProfileValidationErrors(nextValues);
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  }, [errors, touched]);
+
+  const handleNameChange = (value) => {
+    setName(value);
+    updateFieldError('name', { name: value, email, phone });
+  };
+
+  const handleEmailChange = (value) => {
+    setEmail(value);
+    updateFieldError('email', { name, email: value, phone });
+  };
+
+  const handlePhoneChange = (value) => {
+    setPhone(value);
+    updateFieldError('phone', { name, email, phone: value });
+  };
+
+  const handleFieldBlur = (field) => {
+    setTouched((current) => ({ ...current, [field]: true }));
+    const nextErrors = getProfileValidationErrors({ name, email, phone });
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  };
 
   const handlePickProfileImage = async () => {
     if (isDoctor) {
@@ -133,6 +173,7 @@ const ProfileScreen = () => {
     const normalizedName = normalizeName(name);
     const normalizedEmail = normalizeEmail(email);
     const normalizedPhone = normalizePhone(phone);
+    const normalizedAddress = normalizeAddress(address);
     const validationErrors = getProfileValidationErrors({
       name: normalizedName,
       email: normalizedEmail,
@@ -141,6 +182,11 @@ const ProfileScreen = () => {
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      setTouched({
+        name: true,
+        email: true,
+        phone: true,
+      });
       return;
     }
 
@@ -151,7 +197,7 @@ const ProfileScreen = () => {
         name: normalizedName,
         email: normalizedEmail,
         phone: normalizedPhone,
-        address: String(address || '').trim(),
+        address: normalizedAddress,
       });
       Alert.alert('Profile Updated', 'Your information has been saved successfully.');
     } catch (error) {
@@ -238,9 +284,9 @@ const ProfileScreen = () => {
         <Text style={styles.sectionLabel}>ACCOUNT INFORMATION</Text>
 
         <View style={styles.formCard}>
-          <CustomInput label="Full Name"     value={name}    onChangeText={setName}    placeholder="Your name"    autoCapitalize="words" errorMessage={errors.name} />
-          <CustomInput label="Email Address" value={email}   onChangeText={setEmail}   placeholder="Your email"   keyboardType="email-address" errorMessage={errors.email} />
-          <CustomInput label="Phone Number"  value={phone}   onChangeText={setPhone}   placeholder="Your phone"   keyboardType="phone-pad" errorMessage={errors.phone} />
+          <CustomInput label="Full Name"     value={name}    onChangeText={handleNameChange}  onBlur={() => handleFieldBlur('name')}  placeholder="Your name"  autoCapitalize="words" errorMessage={errors.name} />
+          <CustomInput label="Email Address" value={email}   onChangeText={handleEmailChange} onBlur={() => handleFieldBlur('email')} placeholder="Your email" keyboardType="email-address" errorMessage={errors.email} />
+          <CustomInput label="Phone Number"  value={phone}   onChangeText={handlePhoneChange} onBlur={() => handleFieldBlur('phone')} placeholder="Your phone" keyboardType="phone-pad" errorMessage={errors.phone} />
           <CustomInput label="Address"       value={address} onChangeText={setAddress} placeholder="Your address" />
         </View>
 
