@@ -9,6 +9,7 @@ import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {
   getRegisterValidationErrors,
+  normalizeAddress,
   normalizeEmail,
   normalizeName,
   normalizePhone,
@@ -20,6 +21,7 @@ const RegisterScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
@@ -51,34 +53,39 @@ const RegisterScreen = ({ navigation }) => {
 
   const handleNameChange = (value) => {
     setName(value);
-    updateFieldError('name', { name: value, email, phone, password, confirmPassword });
+    updateFieldError('name', { name: value, email, phone, address, password, confirmPassword });
   };
 
   const handleEmailChange = (value) => {
     setEmail(value);
-    updateFieldError('email', { name, email: value, phone, password, confirmPassword });
+    updateFieldError('email', { name, email: value, phone, address, password, confirmPassword });
   };
 
   const handlePhoneChange = (value) => {
     setPhone(value);
-    updateFieldError('phone', { name, email, phone: value, password, confirmPassword });
+    updateFieldError('phone', { name, email, phone: value, address, password, confirmPassword });
+  };
+
+  const handleAddressChange = (value) => {
+    setAddress(value);
+    updateFieldError('address', { name, email, phone, address: value, password, confirmPassword });
   };
 
   const handlePasswordChange = (value) => {
     setPassword(value);
-    const nextValues = { name, email, phone, password: value, confirmPassword };
+    const nextValues = { name, email, phone, address, password: value, confirmPassword };
     updateFieldError('password', nextValues);
     updateFieldError('confirmPassword', nextValues);
   };
 
   const handleConfirmPasswordChange = (value) => {
     setConfirmPassword(value);
-    updateFieldError('confirmPassword', { name, email, phone, password, confirmPassword: value });
+    updateFieldError('confirmPassword', { name, email, phone, address, password, confirmPassword: value });
   };
 
   const handleFieldBlur = (field) => {
     setTouched((current) => ({ ...current, [field]: true }));
-    const nextErrors = getRegisterValidationErrors({ name, email, phone, password, confirmPassword });
+    const nextErrors = getRegisterValidationErrors({ name, email, phone, address, password, confirmPassword });
     setErrors((current) => ({
       ...current,
       [field]: nextErrors[field],
@@ -89,11 +96,13 @@ const RegisterScreen = ({ navigation }) => {
     const normalizedName = normalizeName(name);
     const normalizedEmail = normalizeEmail(email);
     const normalizedPhone = normalizePhone(phone);
+    const normalizedAddress = normalizeAddress(address);
     const normalizedPassword = normalizePassword(password);
     const validationErrors = getRegisterValidationErrors({
       name: normalizedName,
       email: normalizedEmail,
       phone: normalizedPhone,
+      address: normalizedAddress,
       password: normalizedPassword,
       confirmPassword,
     });
@@ -104,6 +113,7 @@ const RegisterScreen = ({ navigation }) => {
         name: true,
         email: true,
         phone: true,
+        address: true,
         password: true,
         confirmPassword: true,
       });
@@ -112,7 +122,7 @@ const RegisterScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      await register(normalizedName, normalizedEmail, normalizedPhone, normalizedPassword);
+      await register(normalizedName, normalizedEmail, normalizedPhone, normalizedAddress, normalizedPassword);
     } catch (error) {
       Alert.alert('Registration Failed', error.response?.data?.message || 'Please try again.');
     } finally {
@@ -176,6 +186,17 @@ const RegisterScreen = ({ navigation }) => {
             autoComplete="tel"
             textContentType="telephoneNumber"
             errorMessage={errors.phone}
+          />
+          <CustomInput
+            label="Address"
+            value={address}
+            onChangeText={handleAddressChange}
+            onBlur={() => handleFieldBlur('address')}
+            placeholder="Your home address"
+            autoCapitalize="words"
+            autoComplete="street-address"
+            textContentType="fullStreetAddress"
+            errorMessage={errors.address}
           />
           <CustomInput
             label="Password"

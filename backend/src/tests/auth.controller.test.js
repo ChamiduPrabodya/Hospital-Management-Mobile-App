@@ -47,20 +47,20 @@ describe('auth.controller registerUser', () => {
     User.exists.mockResolvedValue(true);
   });
 
-  it('requires name, email, and password', async () => {
-    const req = { body: { name: '', email: '', phone: '', password: '' } };
+  it('requires name, email, phone, address, and password', async () => {
+    const req = { body: { name: '', email: '', phone: '', address: '', password: '' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      message: 'Name, email, phone, and password are required',
+      message: 'Name, email, phone, address, and password are required',
     });
   });
 
   it('rejects names shorter than 2 characters', async () => {
-    const req = { body: { name: 'A', email: 'patient@example.com', phone: '0771234567', password: 'secret123' } };
+    const req = { body: { name: 'A', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: 'secret123' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
@@ -72,7 +72,7 @@ describe('auth.controller registerUser', () => {
   });
 
   it('rejects invalid email addresses', async () => {
-    const req = { body: { name: 'Jane Doe', email: 'bad-email', phone: '0771234567', password: 'secret123' } };
+    const req = { body: { name: 'Jane Doe', email: 'bad-email', phone: '0771234567', address: 'Colombo', password: 'secret123' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
@@ -84,7 +84,7 @@ describe('auth.controller registerUser', () => {
   });
 
   it('rejects invalid phone numbers', async () => {
-    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '123', password: 'secret123' } };
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '123', address: 'Colombo', password: 'secret123' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
@@ -96,7 +96,7 @@ describe('auth.controller registerUser', () => {
   });
 
   it('rejects short passwords', async () => {
-    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', password: '123' } };
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: '123' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
@@ -109,7 +109,7 @@ describe('auth.controller registerUser', () => {
 
   it('returns 409 for duplicate email addresses', async () => {
     User.findOne.mockResolvedValue({ _id: 'existing-user' });
-    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', password: 'secret123' } };
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: 'secret123' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
@@ -129,7 +129,7 @@ describe('auth.controller registerUser', () => {
       role: 'patient',
       doctorProfileId: null,
       phone: '+94771234567',
-      address: null,
+      address: 'Colombo',
       profileImage: null,
     });
 
@@ -138,6 +138,7 @@ describe('auth.controller registerUser', () => {
         name: '  Jane Doe  ',
         email: '  Patient@Example.com ',
         phone: ' +94 77 123 4567 ',
+        address: ' Colombo ',
         password: ' secret123 ',
       },
     };
@@ -152,6 +153,7 @@ describe('auth.controller registerUser', () => {
       name: 'Jane Doe',
       email: 'patient@example.com',
       phone: '+94771234567',
+      address: 'Colombo',
       password: 'hashed-password',
       role: 'patient',
     });
@@ -165,7 +167,7 @@ describe('auth.controller registerUser', () => {
       role: 'patient',
       doctorProfileId: null,
       phone: '+94771234567',
-      address: null,
+      address: 'Colombo',
       profileImage: null,
     });
   });

@@ -141,6 +141,13 @@ const ProfileScreen = () => {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>CONTACT DETAILS</Text>
+        <View style={styles.detailCard}>
+          <DetailRow label="Phone" value={phone || 'Not provided'} />
+          <View style={styles.divider} />
+          <DetailRow label="Address" value={address || 'Not provided'} valueStyle={styles.detailValueLeft} />
+        </View>
+
         {isDoctor ? (
           <>
             <Text style={styles.sectionLabel}>PROFESSIONAL PROFILE</Text>
@@ -264,6 +271,9 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     fontWeight: FONTS.bold,
     textAlign: 'right',
+  },
+  detailValueLeft: {
+    textAlign: 'left',
   },
   divider: { height: 1, backgroundColor: COLORS.divider, marginVertical: 11 },
   bioLabel: {

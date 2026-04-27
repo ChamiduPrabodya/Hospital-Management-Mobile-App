@@ -4,6 +4,7 @@ import {
   getLoginValidationErrors,
   getProfileValidationErrors,
   getRegisterValidationErrors,
+  normalizeAddress,
   normalizeEmail,
   normalizeName,
   normalizePhone,
@@ -44,6 +45,7 @@ describe('mobile-app utils/validators', () => {
     expect(normalizeEmail('  TEST@Example.com ')).toBe('test@example.com');
     expect(normalizeName('  Jane Doe  ')).toBe('Jane Doe');
     expect(normalizePhone('  +94 77 123 4567 ')).toBe('+94771234567');
+    expect(normalizeAddress('  12 Main Street  ')).toBe('12 Main Street');
     expect(normalizePassword('  secret123  ')).toBe('secret123');
   });
 
@@ -102,12 +104,14 @@ describe('mobile-app utils/validators', () => {
       name: ' ',
       email: 'bad-email',
       phone: '123',
+      address: ' ',
       password: '123',
       confirmPassword: '456',
     })).toEqual({
       name: 'Full name is required.',
       email: 'Enter a valid email address.',
       phone: 'Enter a valid phone number.',
+      address: 'Address is required.',
       password: 'Password must be at least 6 characters.',
       confirmPassword: 'Passwords do not match.',
     });
@@ -118,6 +122,7 @@ describe('mobile-app utils/validators', () => {
       name: 'Jane Doe',
       email: 'patient@example.com',
       phone: '0771234567',
+      address: 'Colombo',
       password: 'secret123',
       confirmPassword: 'secret123',
     })).toEqual({});
