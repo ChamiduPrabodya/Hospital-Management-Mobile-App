@@ -17,6 +17,7 @@ const CustomInput = ({
   autoComplete,
   textContentType,
   errorMessage,
+  passwordStrength,
   onBlur: onBlurProp,
 }) => {
   const [focused, setFocused] = useState(false);
@@ -39,6 +40,11 @@ const CustomInput = ({
   });
 
   const resolvedSecureTextEntry = secureTextEntry ? !passwordVisible : false;
+  const strengthTone = {
+    weak: COLORS.danger,
+    medium: COLORS.warning,
+    strong: COLORS.success,
+  }[passwordStrength?.level];
 
   return (
     <View style={[styles.group, style]}>
@@ -71,6 +77,24 @@ const CustomInput = ({
           </TouchableOpacity>
         ) : null}
       </Animated.View>
+      {passwordStrength?.score ? (
+        <View style={styles.strengthWrap}>
+          <View style={styles.strengthBars}>
+            {[1, 2, 3].map((step) => (
+              <View
+                key={step}
+                style={[
+                  styles.strengthBar,
+                  step <= passwordStrength.score && { backgroundColor: strengthTone },
+                ]}
+              />
+            ))}
+          </View>
+          <Text style={[styles.strengthText, { color: strengthTone }]}>
+            {passwordStrength.label}
+          </Text>
+        </View>
+      ) : null}
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
     </View>
   );
@@ -117,6 +141,31 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 12,
     color: COLORS.danger,
+  },
+  strengthWrap: {
+    marginTop: 8,
+    marginHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  strengthBars: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.bgMuted,
+  },
+  strengthText: {
+    fontSize: 12,
+    fontWeight: FONTS.bold,
+    minWidth: 52,
+    textAlign: 'right',
   },
   toggleButton: {
     paddingRight: 14,

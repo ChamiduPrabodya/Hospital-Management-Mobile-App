@@ -61,7 +61,7 @@ describe('doctor.controller createDoctor', () => {
         specialization: 'Cardiology',
         experience: 5,
         email: 'doctor@example.com',
-        password: 'doctor123',
+        password: 'Doctor123!',
       },
     };
     const res = createRes();
@@ -98,6 +98,28 @@ describe('doctor.controller createDoctor', () => {
     expect(Doctor.create).not.toHaveBeenCalled();
   });
 
+  it('rejects weak doctor passwords', async () => {
+    const req = {
+      body: {
+        name: 'Dr Test',
+        specialization: 'Cardiology',
+        experience: 5,
+        email: 'doctor@example.com',
+        password: 'doctor123',
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await createDoctor(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Doctor password must use 8+ characters with uppercase, lowercase, number, and symbol',
+    });
+    expect(Doctor.create).not.toHaveBeenCalled();
+  });
+
   it('creates doctor profile and linked doctor user', async () => {
     User.findOne.mockResolvedValue(null);
     const doctor = {
@@ -113,7 +135,7 @@ describe('doctor.controller createDoctor', () => {
         specialization: 'Cardiology',
         experience: 5,
         email: 'Doctor@Example.com ',
-        password: 'doctor123',
+        password: 'Doctor123!',
       },
     };
     const res = createRes();
@@ -121,7 +143,7 @@ describe('doctor.controller createDoctor', () => {
 
     await createDoctor(req, res, next);
 
-    expect(bcrypt.hash).toHaveBeenCalledWith('doctor123', 10);
+    expect(bcrypt.hash).toHaveBeenCalledWith('Doctor123!', 10);
     expect(Doctor.create).toHaveBeenCalled();
     expect(User.create).toHaveBeenCalledWith(expect.objectContaining({
       email: 'doctor@example.com',

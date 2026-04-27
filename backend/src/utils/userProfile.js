@@ -10,6 +10,7 @@ const normalizeText = (value = '') => String(value).trim();
 const EMAIL_MAX_LENGTH = 254;
 const PHONE_MIN_DIGITS = 10;
 const PHONE_MAX_DIGITS = 15;
+const STRONG_PASSWORD_MIN_LENGTH = 8;
 
 const isValidEmail = (email) => {
   const normalizedEmail = normalizeEmail(email);
@@ -21,6 +22,14 @@ const isValidPhone = (phone) => {
   return /^\+?\d+$/.test(normalizedPhone)
     && digitsOnly.length >= PHONE_MIN_DIGITS
     && digitsOnly.length <= PHONE_MAX_DIGITS;
+};
+const isStrongPassword = (password = '') => {
+  const normalizedPassword = String(password).trim();
+  return normalizedPassword.length >= STRONG_PASSWORD_MIN_LENGTH
+    && /[A-Z]/.test(normalizedPassword)
+    && /[a-z]/.test(normalizedPassword)
+    && /\d/.test(normalizedPassword)
+    && /[^A-Za-z0-9]/.test(normalizedPassword);
 };
 
 const normalizeUserProfilePayload = (body = {}) => ({
@@ -65,6 +74,7 @@ const validateUserProfilePayload = (
 module.exports = {
   isValidEmail,
   isValidPhone,
+  isStrongPassword,
   normalizeEmail,
   normalizePhone,
   normalizeUserProfilePayload,
