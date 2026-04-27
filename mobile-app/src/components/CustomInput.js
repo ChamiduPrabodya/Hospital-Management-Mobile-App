@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, Animated } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { COLORS, RADIUS, FONTS } from '../theme';
 
 const CustomInput = ({
@@ -20,6 +20,7 @@ const CustomInput = ({
   onBlur: onBlurProp,
 }) => {
   const [focused, setFocused] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const borderAnim = useRef(new Animated.Value(0)).current;
 
   const handleFocus = () => {
@@ -37,6 +38,8 @@ const CustomInput = ({
     outputRange: [COLORS.inputBorder, COLORS.inputFocus],
   });
 
+  const resolvedSecureTextEntry = secureTextEntry ? !passwordVisible : false;
+
   return (
     <View style={[styles.group, style]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -47,7 +50,7 @@ const CustomInput = ({
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={COLORS.textPlaceholder}
-          secureTextEntry={secureTextEntry}
+          secureTextEntry={resolvedSecureTextEntry}
           keyboardType={keyboardType}
           multiline={multiline}
           numberOfLines={numberOfLines}
@@ -58,6 +61,15 @@ const CustomInput = ({
           onFocus={handleFocus}
           onBlur={handleBlur}
         />
+        {secureTextEntry ? (
+          <TouchableOpacity
+            style={styles.toggleButton}
+            onPress={() => setPasswordVisible((current) => !current)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.toggleText}>{passwordVisible ? 'Hide' : 'Show'}</Text>
+          </TouchableOpacity>
+        ) : null}
       </Animated.View>
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
     </View>
@@ -80,11 +92,16 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderRadius: RADIUS.md,
     backgroundColor: COLORS.inputBg,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   inputWrapError: {
     borderColor: COLORS.danger,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   input: {
+    flex: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
@@ -100,6 +117,17 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 12,
     color: COLORS.danger,
+  },
+  toggleButton: {
+    paddingRight: 14,
+    paddingLeft: 8,
+    paddingVertical: 10,
+  },
+  toggleText: {
+    fontSize: 12,
+    fontWeight: FONTS.bold,
+    color: COLORS.link,
+    letterSpacing: 0.3,
   },
 });
 
