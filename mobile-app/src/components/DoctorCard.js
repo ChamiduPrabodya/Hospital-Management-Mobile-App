@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
 const DoctorCard = ({ doctor, onPress }) => {
+  const imageUri = doctor?.userId?.profileImage || doctor?.image;
   const fee = doctor.consultationFee !== undefined && doctor.consultationFee !== null
     ? `LKR ${Number(doctor.consultationFee).toLocaleString()}`
     : 'N/A';
@@ -9,8 +10,8 @@ const DoctorCard = ({ doctor, onPress }) => {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
       <View>
-        {doctor.image ? (
-          <Image source={{ uri: doctor.image }} style={styles.avatar} resizeMode="cover" />
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.avatar} resizeMode="cover" />
         ) : (
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarText}>{doctor.name?.charAt(0)?.toUpperCase() || 'D'}</Text>

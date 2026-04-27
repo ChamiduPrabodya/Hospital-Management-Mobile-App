@@ -19,6 +19,10 @@ const DoctorListScreen = ({ navigation }) => {
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const { userInfo } = useContext(AuthContext);
   const isAdmin = userInfo?.role === 'admin';
+  const getDoctorImage = useCallback(
+    (doctor) => doctor?.userId?.profileImage || doctor?.image || null,
+    []
+  );
 
   const loadDoctors = useCallback(async () => {
     setLoading(true);
@@ -178,8 +182,8 @@ const DoctorListScreen = ({ navigation }) => {
 
             {selectedDoctor ? (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
-                {selectedDoctor.image ? (
-                  <Image source={{ uri: selectedDoctor.image }} style={styles.doctorImage} resizeMode="cover" />
+                {getDoctorImage(selectedDoctor) ? (
+                  <Image source={{ uri: getDoctorImage(selectedDoctor) }} style={styles.doctorImage} resizeMode="cover" />
                 ) : (
                   <View style={styles.imagePlaceholder}>
                     <Text style={styles.imagePlaceholderText}>

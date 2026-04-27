@@ -2,15 +2,24 @@ export const normalizeEmail = (email = '') => String(email).trim().toLowerCase()
 
 export const normalizeName = (name = '') => String(name).trim();
 
-export const normalizePhone = (phone = '') => String(phone).replace(/[^\d+]/g, '').trim();
+export const normalizePhone = (phone = '') => {
+  const rawPhone = String(phone).trim();
+  const digits = rawPhone.replace(/\D/g, '');
+  return rawPhone.startsWith('+') ? `+${digits}` : digits;
+};
 
 export const normalizeAddress = (address = '') => String(address).trim();
 
 export const normalizePassword = (password = '') => String(password).trim();
 
+const EMAIL_MAX_LENGTH = 254;
+const PHONE_MIN_DIGITS = 10;
+const PHONE_MAX_DIGITS = 15;
+
 export const validateEmail = (email) => {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return re.test(normalizeEmail(email));
+  const normalizedEmail = normalizeEmail(email);
+  return normalizedEmail.length <= EMAIL_MAX_LENGTH && re.test(normalizedEmail);
 };
 
 export const validatePassword = (password) => {
@@ -19,17 +28,58 @@ export const validatePassword = (password) => {
 
 export const validateOtp = (otp) => /^\d{6}$/.test(String(otp).trim());
 
-export const validatePhone = (phone) => /^\+?\d{10,15}$/.test(normalizePhone(phone));
+export const validatePhone = (phone) => {
+  const normalizedPhone = normalizePhone(phone);
+  const digitsOnly = normalizedPhone.replace(/^\+/, '');
+  return /^\+?\d+$/.test(normalizedPhone)
+    && digitsOnly.length >= PHONE_MIN_DIGITS
+    && digitsOnly.length <= PHONE_MAX_DIGITS;
+};
+
+const getNameError = (name) => {
+  if (!name) {
+    return 'Full name is required.';
+  }
+
+  if (name.length < 2) {
+    return 'Enter your full name.';
+  }
+
+  return null;
+};
+
+const getEmailError = (email) => {
+  if (!email) {
+    return 'Email is required.';
+  }
+
+  if (!validateEmail(email)) {
+    return 'Enter a valid email address.';
+  }
+
+  return null;
+};
+
+const getPhoneError = (phone) => {
+  if (!phone) {
+    return 'Phone number is required.';
+  }
+
+  if (!validatePhone(phone)) {
+    return 'Enter a valid phone number.';
+  }
+
+  return null;
+};
 
 export const getLoginValidationErrors = ({ email, password }) => {
   const errors = {};
   const normalizedEmail = normalizeEmail(email);
   const normalizedPassword = normalizePassword(password);
 
-  if (!normalizedEmail) {
-    errors.email = 'Email is required.';
-  } else if (!validateEmail(normalizedEmail)) {
-    errors.email = 'Enter a valid email address.';
+  const emailError = getEmailError(normalizedEmail);
+  if (emailError) {
+    errors.email = emailError;
   }
 
   if (!normalizedPassword) {
@@ -45,10 +95,9 @@ export const getForgotPasswordRequestErrors = ({ email }) => {
   const errors = {};
   const normalizedEmail = normalizeEmail(email);
 
-  if (!normalizedEmail) {
-    errors.email = 'Email is required.';
-  } else if (!validateEmail(normalizedEmail)) {
-    errors.email = 'Enter a valid email address.';
+  const emailError = getEmailError(normalizedEmail);
+  if (emailError) {
+    errors.email = emailError;
   }
 
   return errors;
@@ -61,10 +110,9 @@ export const getForgotPasswordResetErrors = ({ email, otp, password, confirmPass
   const normalizedPassword = normalizePassword(password);
   const normalizedConfirmPassword = normalizePassword(confirmPassword);
 
-  if (!normalizedEmail) {
-    errors.email = 'Email is required.';
-  } else if (!validateEmail(normalizedEmail)) {
-    errors.email = 'Enter a valid email address.';
+  const emailError = getEmailError(normalizedEmail);
+  if (emailError) {
+    errors.email = emailError;
   }
 
   if (!normalizedOtp) {
@@ -97,22 +145,19 @@ export const getRegisterValidationErrors = ({ name, email, phone, address, passw
   const normalizedPassword = normalizePassword(password);
   const normalizedConfirmPassword = normalizePassword(confirmPassword);
 
-  if (!normalizedName) {
-    errors.name = 'Full name is required.';
-  } else if (normalizedName.length < 2) {
-    errors.name = 'Enter your full name.';
+  const nameError = getNameError(normalizedName);
+  if (nameError) {
+    errors.name = nameError;
   }
 
-  if (!normalizedEmail) {
-    errors.email = 'Email is required.';
-  } else if (!validateEmail(normalizedEmail)) {
-    errors.email = 'Enter a valid email address.';
+  const emailError = getEmailError(normalizedEmail);
+  if (emailError) {
+    errors.email = emailError;
   }
 
-  if (!normalizedPhone) {
-    errors.phone = 'Phone number is required.';
-  } else if (!validatePhone(normalizedPhone)) {
-    errors.phone = 'Enter a valid phone number.';
+  const phoneError = getPhoneError(normalizedPhone);
+  if (phoneError) {
+    errors.phone = phoneError;
   }
 
   if (!normalizedAddress) {
@@ -140,22 +185,19 @@ export const getProfileValidationErrors = ({ name, email, phone }) => {
   const normalizedEmail = normalizeEmail(email);
   const normalizedPhone = normalizePhone(phone);
 
-  if (!normalizedName) {
-    errors.name = 'Full name is required.';
-  } else if (normalizedName.length < 2) {
-    errors.name = 'Enter your full name.';
+  const nameError = getNameError(normalizedName);
+  if (nameError) {
+    errors.name = nameError;
   }
 
-  if (!normalizedEmail) {
-    errors.email = 'Email is required.';
-  } else if (!validateEmail(normalizedEmail)) {
-    errors.email = 'Enter a valid email address.';
+  const emailError = getEmailError(normalizedEmail);
+  if (emailError) {
+    errors.email = emailError;
   }
 
-  if (!normalizedPhone) {
-    errors.phone = 'Phone number is required.';
-  } else if (!validatePhone(normalizedPhone)) {
-    errors.phone = 'Enter a valid phone number.';
+  const phoneError = getPhoneError(normalizedPhone);
+  if (phoneError) {
+    errors.phone = phoneError;
   }
 
   return errors;

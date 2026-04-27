@@ -12,6 +12,7 @@ import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {
   getProfileValidationErrors,
+  normalizeAddress,
   normalizeEmail,
   normalizeName,
   normalizePhone,
@@ -39,12 +40,13 @@ const ProfileScreen = () => {
   const [phone,   setPhone]   = useState(userInfo?.phone   || '');
   const [address, setAddress] = useState(userInfo?.address || '');
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const isDoctor = userInfo?.role === 'doctor';
   const doctorProfileId = userInfo?.doctorProfileId?._id || userInfo?.doctorProfileId;
   const displayName = doctorProfile?.name || name;
-  const profileImage = isDoctor ? doctorProfile?.image : userInfo?.profileImage;
+  const profileImage = userInfo?.profileImage || doctorProfile?.userId?.profileImage || doctorProfile?.image || null;
 
   const initials = displayName ? displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
 
@@ -54,6 +56,8 @@ const ProfileScreen = () => {
       setEmail(userInfo?.email || '');
       setPhone(userInfo?.phone || '');
       setAddress(userInfo?.address || '');
+      setErrors({});
+      setTouched({});
     }, [userInfo?.address, userInfo?.email, userInfo?.name, userInfo?.phone])
   );
 
@@ -75,44 +79,80 @@ const ProfileScreen = () => {
     }, [loadDoctorProfile])
   );
 
+  const updateFieldError = useCallback((field, nextValues) => {
+    if (!touched[field] && !errors[field]) {
+      return;
+    }
+
+    const nextErrors = getProfileValidationErrors(nextValues);
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  }, [errors, touched]);
+
+  const handleNameChange = (value) => {
+    setName(value);
+    updateFieldError('name', { name: value, email, phone });
+  };
+
+  const handleEmailChange = (value) => {
+    setEmail(value);
+    updateFieldError('email', { name, email: value, phone });
+  };
+
+  const handlePhoneChange = (value) => {
+    setPhone(value);
+    updateFieldError('phone', { name, email, phone: value });
+  };
+
+  const handleFieldBlur = (field) => {
+    setTouched((current) => ({ ...current, [field]: true }));
+    const nextErrors = getProfileValidationErrors({ name, email, phone });
+    setErrors((current) => ({
+      ...current,
+      [field]: nextErrors[field],
+    }));
+  };
+
   const handlePickProfileImage = async () => {
     if (isDoctor) {
       Alert.alert('Managed By Admin', 'Doctor profile photos are currently managed from the doctor administration flow.');
       return;
     }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission Required', 'Please allow photo access to choose a profile picture.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [ImagePicker.MediaType.Images],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled || !result.assets?.[0]?.uri) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    const uriParts = asset.uri.split('/');
-    const fallbackName = `user-${userInfo?._id || 'profile'}.jpg`;
-    const name = asset.fileName || uriParts[uriParts.length - 1] || fallbackName;
-    const extension = name.split('.').pop()?.toLowerCase();
-    const type = asset.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
-    const formData = new FormData();
-    formData.append('profileImage', {
-      uri: asset.uri,
-      name,
-      type,
-    });
-
-    setLoading(true);
     try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Please allow photo access to choose a profile picture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const uriParts = asset.uri.split('/');
+      const fallbackName = `user-${userInfo?._id || 'profile'}.jpg`;
+      const name = asset.fileName || uriParts[uriParts.length - 1] || fallbackName;
+      const extension = name.split('.').pop()?.toLowerCase();
+      const type = asset.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
+      const formData = new FormData();
+      formData.append('profileImage', {
+        uri: asset.uri,
+        name,
+        type,
+      });
+
+      setLoading(true);
       await updateProfileImage(formData);
       Alert.alert('Profile Picture Updated', 'Your profile picture has been updated successfully.');
     } catch (error) {
@@ -121,7 +161,7 @@ const ProfileScreen = () => {
         formatRequestErrorMessage(error, {
           timeout: 'Profile image upload timed out. Please try again.',
           network: 'Cannot reach the server right now. Please try again.',
-          default: 'Unable to upload your profile picture right now.',
+          default: error?.response?.data?.message || error?.message || 'Unable to upload your profile picture right now.',
         })
       );
     } finally {
@@ -133,6 +173,7 @@ const ProfileScreen = () => {
     const normalizedName = normalizeName(name);
     const normalizedEmail = normalizeEmail(email);
     const normalizedPhone = normalizePhone(phone);
+    const normalizedAddress = normalizeAddress(address);
     const validationErrors = getProfileValidationErrors({
       name: normalizedName,
       email: normalizedEmail,
@@ -141,6 +182,11 @@ const ProfileScreen = () => {
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      setTouched({
+        name: true,
+        email: true,
+        phone: true,
+      });
       return;
     }
 
@@ -151,7 +197,7 @@ const ProfileScreen = () => {
         name: normalizedName,
         email: normalizedEmail,
         phone: normalizedPhone,
-        address: String(address || '').trim(),
+        address: normalizedAddress,
       });
       Alert.alert('Profile Updated', 'Your information has been saved successfully.');
     } catch (error) {
@@ -201,13 +247,6 @@ const ProfileScreen = () => {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>CONTACT DETAILS</Text>
-        <View style={styles.detailCard}>
-          <DetailRow label="Phone" value={phone || 'Not provided'} />
-          <View style={styles.divider} />
-          <DetailRow label="Address" value={address || 'Not provided'} valueStyle={styles.detailValueLeft} />
-        </View>
-
         {isDoctor ? (
           <>
             <Text style={styles.sectionLabel}>PROFESSIONAL PROFILE</Text>
@@ -245,9 +284,9 @@ const ProfileScreen = () => {
         <Text style={styles.sectionLabel}>ACCOUNT INFORMATION</Text>
 
         <View style={styles.formCard}>
-          <CustomInput label="Full Name"     value={name}    onChangeText={setName}    placeholder="Your name"    autoCapitalize="words" errorMessage={errors.name} />
-          <CustomInput label="Email Address" value={email}   onChangeText={setEmail}   placeholder="Your email"   keyboardType="email-address" errorMessage={errors.email} />
-          <CustomInput label="Phone Number"  value={phone}   onChangeText={setPhone}   placeholder="Your phone"   keyboardType="phone-pad" errorMessage={errors.phone} />
+          <CustomInput label="Full Name"     value={name}    onChangeText={handleNameChange}  onBlur={() => handleFieldBlur('name')}  placeholder="Your name"  autoCapitalize="words" errorMessage={errors.name} />
+          <CustomInput label="Email Address" value={email}   onChangeText={handleEmailChange} onBlur={() => handleFieldBlur('email')} placeholder="Your email" keyboardType="email-address" errorMessage={errors.email} />
+          <CustomInput label="Phone Number"  value={phone}   onChangeText={handlePhoneChange} onBlur={() => handleFieldBlur('phone')} placeholder="Your phone" keyboardType="phone-pad" errorMessage={errors.phone} />
           <CustomInput label="Address"       value={address} onChangeText={setAddress} placeholder="Your address" />
         </View>
 

@@ -39,12 +39,14 @@ describe('mobile-app utils/validators', () => {
     expect(validatePhone('0771234567')).toBe(true);
     expect(validatePhone('+94771234567')).toBe(true);
     expect(validatePhone('12345')).toBe(false);
+    expect(validatePhone('+9477123456789012')).toBe(false);
   });
 
   it('normalizes login fields before validation', () => {
     expect(normalizeEmail('  TEST@Example.com ')).toBe('test@example.com');
     expect(normalizeName('  Jane Doe  ')).toBe('Jane Doe');
     expect(normalizePhone('  +94 77 123 4567 ')).toBe('+94771234567');
+    expect(normalizePhone(' (077) 123-4567 ')).toBe('0771234567');
     expect(normalizeAddress('  12 Main Street  ')).toBe('12 Main Street');
     expect(normalizePassword('  secret123  ')).toBe('secret123');
   });
