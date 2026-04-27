@@ -126,3 +126,30 @@ export const getRegisterValidationErrors = ({ name, email, phone, password, conf
 
   return errors;
 };
+
+export const getProfileValidationErrors = ({ name, email, phone }) => {
+  const errors = {};
+  const normalizedName = normalizeName(name);
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPhone = normalizePhone(phone);
+
+  if (!normalizedName) {
+    errors.name = 'Full name is required.';
+  } else if (normalizedName.length < 2) {
+    errors.name = 'Enter your full name.';
+  }
+
+  if (!normalizedEmail) {
+    errors.email = 'Email is required.';
+  } else if (!validateEmail(normalizedEmail)) {
+    errors.email = 'Enter a valid email address.';
+  }
+
+  if (!normalizedPhone) {
+    errors.phone = 'Phone number is required.';
+  } else if (!validatePhone(normalizedPhone)) {
+    errors.phone = 'Enter a valid phone number.';
+  }
+
+  return errors;
+};

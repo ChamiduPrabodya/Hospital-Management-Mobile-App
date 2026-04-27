@@ -5,11 +5,17 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/AuthContext';
-import { updateUserApi } from '../../api/userApi';
 import { getDoctorByIdApi } from '../../api/doctorApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import {
+  getProfileValidationErrors,
+  normalizeEmail,
+  normalizeName,
+  normalizePhone,
+} from '../../utils/validators';
+import { formatRequestErrorMessage } from '../../utils/requestError';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
 const DetailRow = ({ label, value, valueStyle }) => (
@@ -26,11 +32,12 @@ const formatLkr = (value) => (
 );
 
 const ProfileScreen = () => {
-  const { userInfo, logout } = useContext(AuthContext);
+  const { userInfo, logout, updateProfile } = useContext(AuthContext);
   const [name,    setName]    = useState(userInfo?.name    || '');
   const [email,   setEmail]   = useState(userInfo?.email   || '');
   const [phone,   setPhone]   = useState(userInfo?.phone   || '');
   const [address, setAddress] = useState(userInfo?.address || '');
+  const [errors, setErrors] = useState({});
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const isDoctor = userInfo?.role === 'doctor';
@@ -39,6 +46,15 @@ const ProfileScreen = () => {
   const profileImage = isDoctor ? doctorProfile?.image : userInfo?.profileImage;
 
   const initials = displayName ? displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
+
+  useFocusEffect(
+    useCallback(() => {
+      setName(userInfo?.name || '');
+      setEmail(userInfo?.email || '');
+      setPhone(userInfo?.phone || '');
+      setAddress(userInfo?.address || '');
+    }, [userInfo?.address, userInfo?.email, userInfo?.name, userInfo?.phone])
+  );
 
   const loadDoctorProfile = useCallback(async () => {
     if (!isDoctor || !doctorProfileId) return;
@@ -59,12 +75,39 @@ const ProfileScreen = () => {
   );
 
   const handleUpdate = async () => {
+    const normalizedName = normalizeName(name);
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = normalizePhone(phone);
+    const validationErrors = getProfileValidationErrors({
+      name: normalizedName,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+    });
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
     setLoading(true);
     try {
-      await updateUserApi(userInfo._id, { name, email, phone, address });
+      setErrors({});
+      await updateProfile({
+        name: normalizedName,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        address: String(address || '').trim(),
+      });
       Alert.alert('Profile Updated', 'Your information has been saved successfully.');
     } catch (error) {
-      Alert.alert('Update Failed', error.response?.data?.message || 'Please try again.');
+      Alert.alert(
+        'Update Failed',
+        formatRequestErrorMessage(error, {
+          timeout: 'Profile update timed out. Please try again.',
+          network: 'Cannot reach the server right now. Please try again.',
+          default: 'Please try again.',
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -135,9 +178,9 @@ const ProfileScreen = () => {
         <Text style={styles.sectionLabel}>ACCOUNT INFORMATION</Text>
 
         <View style={styles.formCard}>
-          <CustomInput label="Full Name"     value={name}    onChangeText={setName}    placeholder="Your name"    />
-          <CustomInput label="Email Address" value={email}   onChangeText={setEmail}   placeholder="Your email"   keyboardType="email-address" />
-          <CustomInput label="Phone Number"  value={phone}   onChangeText={setPhone}   placeholder="Your phone"   keyboardType="phone-pad" />
+          <CustomInput label="Full Name"     value={name}    onChangeText={setName}    placeholder="Your name"    autoCapitalize="words" errorMessage={errors.name} />
+          <CustomInput label="Email Address" value={email}   onChangeText={setEmail}   placeholder="Your email"   keyboardType="email-address" errorMessage={errors.email} />
+          <CustomInput label="Phone Number"  value={phone}   onChangeText={setPhone}   placeholder="Your phone"   keyboardType="phone-pad" errorMessage={errors.phone} />
           <CustomInput label="Address"       value={address} onChangeText={setAddress} placeholder="Your address" />
         </View>
 

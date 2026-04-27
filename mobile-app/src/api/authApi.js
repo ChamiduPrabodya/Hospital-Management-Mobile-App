@@ -5,3 +5,4 @@ export const registerApi = (name, email, phone, password) => axios.post('/auth/r
 export const requestPasswordResetOtpApi = (email) => axios.post('/auth/forgot-password/request-otp', { email });
 export const resetPasswordWithOtpApi = (email, otp, password) => axios.post('/auth/forgot-password/reset', { email, otp, password });
 export const getMeApi = () => axios.get('/auth/me');
+export const updateMeApi = (data) => axios.put('/auth/me', data);
