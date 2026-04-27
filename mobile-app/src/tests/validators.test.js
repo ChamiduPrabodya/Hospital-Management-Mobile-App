@@ -2,6 +2,7 @@ import {
   getForgotPasswordRequestErrors,
   getForgotPasswordResetErrors,
   getLoginValidationErrors,
+  getPasswordStrength,
   getProfileValidationErrors,
   getRegisterValidationErrors,
   normalizeAddress,
@@ -12,6 +13,7 @@ import {
   validateEmail,
   validateOtp,
   validatePassword,
+  validateStrongPassword,
   validatePhone,
 } from '../utils/validators';
 
@@ -27,6 +29,35 @@ describe('mobile-app utils/validators', () => {
   it('validatePassword requires at least 6 characters', () => {
     expect(validatePassword('12345')).toBe(false);
     expect(validatePassword('123456')).toBe(true);
+  });
+
+  it('validateStrongPassword requires upper, lower, number, and symbol', () => {
+    expect(validateStrongPassword('secret123')).toBe(false);
+    expect(validateStrongPassword('Secret123')).toBe(false);
+    expect(validateStrongPassword('Secret123!')).toBe(true);
+  });
+
+  it('getPasswordStrength classifies weak, medium, and strong passwords', () => {
+    expect(getPasswordStrength('')).toEqual({
+      level: 'empty',
+      label: '',
+      score: 0,
+    });
+    expect(getPasswordStrength('abc')).toEqual({
+      level: 'weak',
+      label: 'Weak',
+      score: 1,
+    });
+    expect(getPasswordStrength('Secret123')).toEqual({
+      level: 'medium',
+      label: 'Medium',
+      score: 2,
+    });
+    expect(getPasswordStrength('Secret123!')).toEqual({
+      level: 'strong',
+      label: 'Strong',
+      score: 3,
+    });
   });
 
   it('validateOtp requires exactly 6 digits', () => {
@@ -87,7 +118,7 @@ describe('mobile-app utils/validators', () => {
     })).toEqual({
       email: 'Enter a valid email address.',
       otp: 'Enter the 6-digit OTP.',
-      password: 'Password must be at least 6 characters.',
+      password: 'Use 8+ chars with upper, lower, number, and symbol.',
       confirmPassword: 'Passwords do not match.',
     });
   });
@@ -96,8 +127,8 @@ describe('mobile-app utils/validators', () => {
     expect(getForgotPasswordResetErrors({
       email: 'patient@example.com',
       otp: '123456',
-      password: 'secret123',
-      confirmPassword: 'secret123',
+      password: 'Secret123!',
+      confirmPassword: 'Secret123!',
     })).toEqual({});
   });
 
@@ -114,7 +145,7 @@ describe('mobile-app utils/validators', () => {
       email: 'Enter a valid email address.',
       phone: 'Enter a valid phone number.',
       address: 'Address is required.',
-      password: 'Password must be at least 6 characters.',
+      password: 'Use 8+ chars with upper, lower, number, and symbol.',
       confirmPassword: 'Passwords do not match.',
     });
   });
@@ -125,8 +156,8 @@ describe('mobile-app utils/validators', () => {
       email: 'patient@example.com',
       phone: '0771234567',
       address: 'Colombo',
-      password: 'secret123',
-      confirmPassword: 'secret123',
+      password: 'Secret123!',
+      confirmPassword: 'Secret123!',
     })).toEqual({});
   });
 

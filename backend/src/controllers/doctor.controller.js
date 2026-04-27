@@ -5,6 +5,7 @@ const User = require('../models/user.model');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
 const { validateObjectIdParam } = require('../utils/validateObjectId');
+const { isStrongPassword } = require('../utils/userProfile');
 
 const isValidEmail = (email) => /\S+@\S+\.\S+/.test(String(email));
 
@@ -32,8 +33,8 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Doctor email must be valid' });
   }
 
-  if (normalizedPassword.length < 6) {
-    return res.status(400).json({ message: 'Doctor password must be at least 6 characters' });
+  if (!isStrongPassword(normalizedPassword)) {
+    return res.status(400).json({ message: 'Doctor password must use 8+ characters with uppercase, lowercase, number, and symbol' });
   }
 
   const existingUser = await User.findOne({ email: normalizedEmail });
@@ -141,8 +142,8 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
 
     if (req.body.password !== undefined && String(req.body.password).trim()) {
       const normalizedPassword = String(req.body.password).trim();
-      if (normalizedPassword.length < 6) {
-        return res.status(400).json({ message: 'Doctor password must be at least 6 characters' });
+      if (!isStrongPassword(normalizedPassword)) {
+        return res.status(400).json({ message: 'Doctor password must use 8+ characters with uppercase, lowercase, number, and symbol' });
       }
       user.password = await bcrypt.hash(normalizedPassword, 10);
     }

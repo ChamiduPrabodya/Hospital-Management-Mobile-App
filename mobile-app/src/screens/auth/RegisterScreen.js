@@ -9,6 +9,7 @@ import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {
   getRegisterValidationErrors,
+  getPasswordStrength,
   normalizeAddress,
   normalizeEmail,
   normalizeName,
@@ -31,6 +32,7 @@ const RegisterScreen = ({ navigation }) => {
 
   const slideAnim = useRef(new Animated.Value(40)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const passwordStrength = getPasswordStrength(password);
 
   useEffect(() => {
     Animated.parallel([
@@ -203,10 +205,11 @@ const RegisterScreen = ({ navigation }) => {
             value={password}
             onChangeText={handlePasswordChange}
             onBlur={() => handleFieldBlur('password')}
-            placeholder="Create a password with at least 6 characters"
+            placeholder="Use 8+ chars with upper, lower, number, symbol"
             secureTextEntry
             autoComplete="new-password"
             textContentType="newPassword"
+            passwordStrength={passwordStrength}
             errorMessage={errors.password}
           />
           <CustomInput

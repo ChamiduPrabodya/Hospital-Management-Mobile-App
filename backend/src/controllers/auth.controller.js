@@ -7,6 +7,7 @@ const {
   isValidEmail,
   normalizePhone,
   isValidPhone,
+  isStrongPassword,
   normalizeUserProfilePayload,
   validateUserProfilePayload,
 } = require('../utils/userProfile');
@@ -40,8 +41,8 @@ exports.registerUser = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: validationMessage });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  if (!isStrongPassword(password)) {
+    return res.status(400).json({ message: 'Password must use 8+ characters with uppercase, lowercase, number, and symbol' });
   }
 
   const existingUser = await User.findOne({ email });
@@ -155,8 +156,8 @@ exports.resetPasswordWithOtp = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'OTP must be a 6-digit code' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  if (!isStrongPassword(password)) {
+    return res.status(400).json({ message: 'Password must use 8+ characters with uppercase, lowercase, number, and symbol' });
   }
 
   const user = await User.findOne({ email, isActive: { $ne: false } });

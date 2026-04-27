@@ -15,6 +15,13 @@ export const normalizePassword = (password = '') => String(password).trim();
 const EMAIL_MAX_LENGTH = 254;
 const PHONE_MIN_DIGITS = 10;
 const PHONE_MAX_DIGITS = 15;
+const STRONG_PASSWORD_MIN_LENGTH = 8;
+const STRONG_PASSWORD_CHECKS = [
+  /[A-Z]/,
+  /[a-z]/,
+  /\d/,
+  /[^A-Za-z0-9]/,
+];
 
 export const validateEmail = (email) => {
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -24,6 +31,54 @@ export const validateEmail = (email) => {
 
 export const validatePassword = (password) => {
   return normalizePassword(password).length >= 6;
+};
+
+export const validateStrongPassword = (password) => {
+  const normalizedPassword = normalizePassword(password);
+  return normalizedPassword.length >= STRONG_PASSWORD_MIN_LENGTH
+    && /[A-Z]/.test(normalizedPassword)
+    && /[a-z]/.test(normalizedPassword)
+    && /\d/.test(normalizedPassword)
+    && /[^A-Za-z0-9]/.test(normalizedPassword);
+};
+
+export const getPasswordStrength = (password) => {
+  const normalizedPassword = normalizePassword(password);
+
+  if (!normalizedPassword) {
+    return {
+      level: 'empty',
+      label: '',
+      score: 0,
+    };
+  }
+
+  const passedChecks = STRONG_PASSWORD_CHECKS.reduce(
+    (total, pattern) => total + (pattern.test(normalizedPassword) ? 1 : 0),
+    0
+  );
+
+  if (validateStrongPassword(normalizedPassword)) {
+    return {
+      level: 'strong',
+      label: 'Strong',
+      score: 3,
+    };
+  }
+
+  if (normalizedPassword.length >= STRONG_PASSWORD_MIN_LENGTH && passedChecks >= 3) {
+    return {
+      level: 'medium',
+      label: 'Medium',
+      score: 2,
+    };
+  }
+
+  return {
+    level: 'weak',
+    label: 'Weak',
+    score: 1,
+  };
 };
 
 export const validateOtp = (otp) => /^\d{6}$/.test(String(otp).trim());
@@ -67,6 +122,18 @@ const getPhoneError = (phone) => {
 
   if (!validatePhone(phone)) {
     return 'Enter a valid phone number.';
+  }
+
+  return null;
+};
+
+const getStrongPasswordError = (password) => {
+  if (!password) {
+    return 'Password is required.';
+  }
+
+  if (!validateStrongPassword(password)) {
+    return 'Use 8+ chars with upper, lower, number, and symbol.';
   }
 
   return null;
@@ -121,10 +188,9 @@ export const getForgotPasswordResetErrors = ({ email, otp, password, confirmPass
     errors.otp = 'Enter the 6-digit OTP.';
   }
 
-  if (!normalizedPassword) {
-    errors.password = 'New password is required.';
-  } else if (!validatePassword(normalizedPassword)) {
-    errors.password = 'Password must be at least 6 characters.';
+  const passwordError = getStrongPasswordError(normalizedPassword);
+  if (passwordError) {
+    errors.password = normalizedPassword ? passwordError : 'New password is required.';
   }
 
   if (!normalizedConfirmPassword) {
@@ -164,10 +230,9 @@ export const getRegisterValidationErrors = ({ name, email, phone, address, passw
     errors.address = 'Address is required.';
   }
 
-  if (!normalizedPassword) {
-    errors.password = 'Password is required.';
-  } else if (!validatePassword(normalizedPassword)) {
-    errors.password = 'Password must be at least 6 characters.';
+  const passwordError = getStrongPasswordError(normalizedPassword);
+  if (passwordError) {
+    errors.password = passwordError;
   }
 
   if (!normalizedConfirmPassword) {

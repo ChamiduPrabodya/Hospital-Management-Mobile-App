@@ -95,21 +95,21 @@ describe('auth.controller registerUser', () => {
     });
   });
 
-  it('rejects short passwords', async () => {
-    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: '123' } };
+  it('rejects weak passwords during registration', async () => {
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: 'secret123' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      message: 'Password must be at least 6 characters',
+      message: 'Password must use 8+ characters with uppercase, lowercase, number, and symbol',
     });
   });
 
   it('returns 409 for duplicate email addresses', async () => {
     User.findOne.mockResolvedValue({ _id: 'existing-user' });
-    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: 'secret123' } };
+    const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: 'Secret123!' } };
     const res = createRes();
 
     await registerUser(req, res, jest.fn());
@@ -139,7 +139,7 @@ describe('auth.controller registerUser', () => {
         email: '  Patient@Example.com ',
         phone: ' +94 77 123 4567 ',
         address: ' Colombo ',
-        password: ' secret123 ',
+        password: ' Secret123! ',
       },
     };
     const res = createRes();
@@ -148,7 +148,7 @@ describe('auth.controller registerUser', () => {
 
     expect(User.findOne).toHaveBeenCalledWith({ email: 'patient@example.com' });
     expect(bcrypt.genSalt).toHaveBeenCalledWith(10);
-    expect(bcrypt.hash).toHaveBeenCalledWith('secret123', 'salt');
+    expect(bcrypt.hash).toHaveBeenCalledWith('Secret123!', 'salt');
     expect(User.create).toHaveBeenCalledWith({
       name: 'Jane Doe',
       email: 'patient@example.com',
@@ -390,7 +390,7 @@ describe('auth.controller resetPasswordWithOtp', () => {
   });
 
   it('rejects invalid OTP format', async () => {
-    const req = { body: { email: 'patient@example.com', otp: '12', password: 'secret123' } };
+    const req = { body: { email: 'patient@example.com', otp: '12', password: 'Secret123!' } };
     const res = createRes();
 
     await resetPasswordWithOtp(req, res, jest.fn());
@@ -403,7 +403,7 @@ describe('auth.controller resetPasswordWithOtp', () => {
 
   it('returns 404 when the account is not found', async () => {
     User.findOne.mockResolvedValue(null);
-    const req = { body: { email: 'patient@example.com', otp: '123456', password: 'secret123' } };
+    const req = { body: { email: 'patient@example.com', otp: '123456', password: 'Secret123!' } };
     const res = createRes();
 
     await resetPasswordWithOtp(req, res, jest.fn());
@@ -418,12 +418,25 @@ describe('auth.controller resetPasswordWithOtp', () => {
     });
   });
 
+  it('rejects weak reset passwords before checking the account', async () => {
+    const req = { body: { email: 'patient@example.com', otp: '123456', password: 'secret123' } };
+    const res = createRes();
+
+    await resetPasswordWithOtp(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Password must use 8+ characters with uppercase, lowercase, number, and symbol',
+    });
+    expect(User.findOne).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid or expired OTP values', async () => {
     User.findOne.mockResolvedValue({
       resetPasswordOtpHash: 'hashed-otp',
       resetPasswordOtpExpiresAt: new Date(Date.now() - 1000),
     });
-    const req = { body: { email: 'patient@example.com', otp: '123456', password: 'secret123' } };
+    const req = { body: { email: 'patient@example.com', otp: '123456', password: 'Secret123!' } };
     const res = createRes();
 
     await resetPasswordWithOtp(req, res, jest.fn());
@@ -446,14 +459,14 @@ describe('auth.controller resetPasswordWithOtp', () => {
       body: {
         email: ' Patient@Example.com ',
         otp: '123456',
-        password: ' secret123 ',
+        password: ' Secret123! ',
       },
     };
     const res = createRes();
 
     await resetPasswordWithOtp(req, res, jest.fn());
 
-    expect(bcrypt.hash).toHaveBeenCalledWith('secret123', 10);
+    expect(bcrypt.hash).toHaveBeenCalledWith('Secret123!', 10);
     expect(user.password).toBe('hashed-password');
     expect(user.resetPasswordOtpHash).toBe(null);
     expect(user.resetPasswordOtpExpiresAt).toBe(null);
