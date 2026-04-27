@@ -19,6 +19,8 @@ import {
   normalizeEmail,
   normalizePassword,
 } from '../../utils/validators';
+import { BASE_URL } from '../../utils/constants';
+import { formatRequestErrorMessage } from '../../utils/requestError';
 
 const { width, height } = Dimensions.get('window');
 
@@ -271,9 +273,11 @@ const LoginScreen = ({ navigation, route }) => {
     try {
       await login(normalizedEmail, normalizedPassword);
     } catch (error) {
-      const message = error.response?.data?.message
-        || (error.request ? 'Cannot reach the server. Check backend, Wi-Fi IP, and MongoDB connection.' : error.message)
-        || 'Invalid credentials. Please try again.';
+      const message = formatRequestErrorMessage(error, {
+        timeout: `Login timed out while contacting ${BASE_URL}. Make sure the backend is running.`,
+        network: `Cannot reach the login server at ${BASE_URL}. Make sure the backend is running and your device can reach this address.`,
+        default: 'Unable to sign in right now. Please try again.',
+      });
 
       Alert.alert(
         'Sign In Failed',

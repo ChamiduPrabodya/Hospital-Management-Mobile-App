@@ -14,6 +14,7 @@ jest.mock('crypto', () => ({
 
 jest.mock('../models/user.model', () => ({
   findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
   create: jest.fn(),
   exists: jest.fn(),
 }));
@@ -29,6 +30,7 @@ const {
   loginUser,
   requestPasswordResetOtp,
   resetPasswordWithOtp,
+  updateMe,
 } = require('../controllers/auth.controller');
 
 const createRes = () => {
@@ -458,5 +460,95 @@ describe('auth.controller resetPasswordWithOtp', () => {
     expect(res.json).toHaveBeenCalledWith({
       message: 'Password reset successful. You can now sign in.',
     });
+  });
+});
+
+describe('auth.controller updateMe', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('validates the profile payload', async () => {
+    const req = {
+      user: { _id: 'user-id' },
+      body: { name: '', email: 'bad-email', phone: '123' },
+    };
+    const res = createRes();
+
+    await updateMe(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Name is required',
+    });
+  });
+
+  it('returns 409 when another active user already has the email', async () => {
+    User.findOne.mockResolvedValue({ _id: 'other-user' });
+    const req = {
+      user: { _id: 'user-id' },
+      body: {
+        name: 'Jane Doe',
+        email: 'jane@example.com',
+        phone: '0771234567',
+        address: 'Colombo',
+      },
+    };
+    const res = createRes();
+
+    await updateMe(req, res, jest.fn());
+
+    expect(User.findOne).toHaveBeenCalledWith({
+      email: 'jane@example.com',
+      _id: { $ne: 'user-id' },
+      isActive: { $ne: false },
+    });
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Email is already registered',
+    });
+  });
+
+  it('updates and normalizes the current user profile', async () => {
+    User.findOne.mockResolvedValue(null);
+    const updatedUser = {
+      _id: 'user-id',
+      name: 'Jane Doe',
+      email: 'jane@example.com',
+      phone: '+94771234567',
+      address: 'Colombo',
+      profileImage: '',
+    };
+    User.findOneAndUpdate.mockReturnValue({
+      select: jest.fn().mockResolvedValue(updatedUser),
+    });
+
+    const req = {
+      user: { _id: 'user-id' },
+      body: {
+        name: '  Jane Doe  ',
+        email: ' Jane@Example.com ',
+        phone: ' +94 77 123 4567 ',
+        address: ' Colombo ',
+        profileImage: ' ',
+      },
+    };
+    const res = createRes();
+
+    await updateMe(req, res, jest.fn());
+
+    expect(User.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'user-id', isActive: { $ne: false } },
+      {
+        name: 'Jane Doe',
+        email: 'jane@example.com',
+        phone: '+94771234567',
+        address: 'Colombo',
+        profileImage: '',
+      },
+      { new: true }
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(updatedUser);
   });
 });

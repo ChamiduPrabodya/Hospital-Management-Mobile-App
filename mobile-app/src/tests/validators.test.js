@@ -2,6 +2,7 @@ import {
   getForgotPasswordRequestErrors,
   getForgotPasswordResetErrors,
   getLoginValidationErrors,
+  getProfileValidationErrors,
   getRegisterValidationErrors,
   normalizeEmail,
   normalizeName,
@@ -119,6 +120,26 @@ describe('mobile-app utils/validators', () => {
       phone: '0771234567',
       password: 'secret123',
       confirmPassword: 'secret123',
+    })).toEqual({});
+  });
+
+  it('returns field errors for invalid profile input', () => {
+    expect(getProfileValidationErrors({
+      name: 'A',
+      email: 'bad-email',
+      phone: '123',
+    })).toEqual({
+      name: 'Enter your full name.',
+      email: 'Enter a valid email address.',
+      phone: 'Enter a valid phone number.',
+    });
+  });
+
+  it('accepts valid profile input', () => {
+    expect(getProfileValidationErrors({
+      name: 'Jane Doe',
+      email: 'patient@example.com',
+      phone: '+94771234567',
     })).toEqual({});
   });
 });

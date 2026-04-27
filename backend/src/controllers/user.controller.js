@@ -2,6 +2,10 @@ const User = require('../models/user.model');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
 const { validateObjectIdParam } = require('../utils/validateObjectId');
+const {
+  normalizeUserProfilePayload,
+  validateUserProfilePayload,
+} = require('../utils/userProfile');
 
 exports.getUsers = asyncHandler(async (req, res) => {
   const users = await User.find({ isActive: { $ne: false } }).select('-password');
@@ -34,13 +38,22 @@ exports.updateUser = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  const updates = {
-    name: req.body.name,
-    email: req.body.email,
-    phone: req.body.phone,
-    address: req.body.address,
-    profileImage: req.body.profileImage,
-  };
+  const updates = normalizeUserProfilePayload(req.body);
+  const validationMessage = validateUserProfilePayload(updates);
+
+  if (validationMessage) {
+    return res.status(400).json({ message: validationMessage });
+  }
+
+  const existingUser = await User.findOne({
+    email: updates.email,
+    _id: { $ne: id },
+    isActive: { $ne: false },
+  });
+
+  if (existingUser) {
+    return res.status(409).json({ message: 'Email is already registered' });
+  }
 
   const user = await User.findOneAndUpdate(
     { _id: id, isActive: { $ne: false } },

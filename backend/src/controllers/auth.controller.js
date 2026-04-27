@@ -3,11 +3,15 @@ const crypto = require('crypto');
 const User = require('../models/user.model');
 const generateToken = require('../utils/generateToken');
 const asyncHandler = require('../utils/asyncHandler');
+const {
+  isValidEmail,
+  normalizePhone,
+  isValidPhone,
+  normalizeUserProfilePayload,
+  validateUserProfilePayload,
+} = require('../utils/userProfile');
 
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email));
 const isValidOtp = (otp) => /^\d{6}$/.test(String(otp));
-const normalizePhone = (phone = '') => String(phone).replace(/[^\d+]/g, '').trim();
-const isValidPhone = (phone) => /^\+?\d{10,15}$/.test(normalizePhone(phone));
 const OTP_EXPIRY_MINUTES = 10;
 const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest('hex');
 const buildAuthPayload = (user, token) => ({
@@ -185,4 +189,35 @@ exports.resetPasswordWithOtp = asyncHandler(async (req, res) => {
 exports.getMe = asyncHandler(async (req, res) => {
   const user = req.user;
   res.status(200).json(user);
+});
+
+exports.updateMe = asyncHandler(async (req, res) => {
+  const updates = normalizeUserProfilePayload(req.body);
+  const validationMessage = validateUserProfilePayload(updates);
+
+  if (validationMessage) {
+    return res.status(400).json({ message: validationMessage });
+  }
+
+  const existingUser = await User.findOne({
+    email: updates.email,
+    _id: { $ne: req.user._id },
+    isActive: { $ne: false },
+  });
+
+  if (existingUser) {
+    return res.status(409).json({ message: 'Email is already registered' });
+  }
+
+  const user = await User.findOneAndUpdate(
+    { _id: req.user._id, isActive: { $ne: false } },
+    updates,
+    { new: true }
+  ).select('-password');
+
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  return res.status(200).json(user);
 });

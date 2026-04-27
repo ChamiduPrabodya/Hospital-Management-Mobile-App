@@ -62,13 +62,17 @@ npm install
 
 3. Configure backend URL
 
-Open `src/utils/constants.js` and update `BASE_URL` to point to your backend API.
+The app now resolves the backend URL automatically:
 
-```js
-export const BASE_URL = 'http://localhost:5000/api';
+- `EXPO_PUBLIC_API_URL` is used first when set
+- otherwise the app reuses the current Expo LAN host and points it to port `5000`
+- if Expo host info is unavailable, it falls back to `10.0.2.2` on Android and `localhost` elsewhere
+
+Optional manual override:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.8:5000/api npm start
 ```
-
-If you run the backend on a local machine and want to use a physical device, replace `localhost` with your machine's local network IP.
 
 ## Run the app
 
@@ -230,7 +234,7 @@ The mobile app attaches the bearer token automatically to requests using `axios`
 
 - Add a descriptive repository title such as `Doctor Appointment Mobile App`
 - Use this README as the root `README.md`
-- Mention that the backend API URL must be updated before running the app
+- Mention that the backend API URL can be overridden with `EXPO_PUBLIC_API_URL` when needed
 - Highlight that this is built with Expo and supports Android/iOS via Expo Go
 
 ## Running Tests
@@ -243,8 +247,8 @@ npm test
 
 ## Troubleshooting
 
-- If the app fails to connect, verify `BASE_URL` in `src/utils/constants.js`
-- If Expo cannot reach the backend on a physical device, use your machine IP address instead of `localhost`
+- If the app fails to connect on a physical device, make sure the phone and computer are on the same Wi-Fi network
+- If automatic detection is not suitable for your setup, start Expo with `EXPO_PUBLIC_API_URL=http://YOUR_IP:5000/api`
 - If screen shows blank or crashes, restart Expo and clear cache with `npm start -- --clear`
 
 ## License
