@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 
 const Doctor = require('../models/doctor.model');
+const User = require('../models/user.model');
 
 const getOriginFromBaseUrl = (req) => {
   if (req?.get) {
@@ -33,4 +34,23 @@ exports.uploadDoctorImage = asyncHandler(async (req, res) => {
   await doctor.save();
 
   res.status(200).json({ imageUrl, doctor });
+});
+
+exports.uploadUserProfileImage = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'profileImage file is required' });
+  }
+
+  const user = await User.findById(req.user._id).select('-password');
+  if (!user || user.isActive === false) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  const origin = getOriginFromBaseUrl(req);
+  const imageUrl = `${origin}/uploads/profile-images/${req.file.filename}`;
+
+  user.profileImage = imageUrl;
+  await user.save();
+
+  res.status(200).json({ imageUrl, user });
 });

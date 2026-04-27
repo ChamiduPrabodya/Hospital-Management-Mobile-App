@@ -6,6 +6,7 @@ import {
   registerApi,
   updateMeApi,
 } from '../api/authApi';
+import { uploadUserProfileImageApi } from '../api/uploadApi';
 
 export const AuthContext = createContext();
 
@@ -57,6 +58,14 @@ export const AuthProvider = ({ children }) => {
     return user;
   };
 
+  const updateProfileImage = async (formData) => {
+    const response = await uploadUserProfileImageApi(formData);
+    const user = response.data?.user || response.data;
+    setUserInfo(user);
+    await AsyncStorage.setItem('userInfo', JSON.stringify(user));
+    return user;
+  };
+
   const logout = async () => {
     setUserToken(null);
     setUserInfo(null);
@@ -95,6 +104,7 @@ export const AuthProvider = ({ children }) => {
       logout,
       refreshUser,
       updateProfile,
+      updateProfileImage,
       userToken,
       userInfo,
       isLoading,
