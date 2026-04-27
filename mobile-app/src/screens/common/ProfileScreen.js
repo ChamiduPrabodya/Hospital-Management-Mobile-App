@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Platform, StatusBar, Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { AuthContext } from '../../context/AuthContext';
 import { getDoctorByIdApi } from '../../api/doctorApi';
 import CustomInput from '../../components/CustomInput';
@@ -32,7 +33,7 @@ const formatLkr = (value) => (
 );
 
 const ProfileScreen = () => {
-  const { userInfo, logout, updateProfile } = useContext(AuthContext);
+  const { userInfo, logout, updateProfile, updateProfileImage } = useContext(AuthContext);
   const [name,    setName]    = useState(userInfo?.name    || '');
   const [email,   setEmail]   = useState(userInfo?.email   || '');
   const [phone,   setPhone]   = useState(userInfo?.phone   || '');
@@ -73,6 +74,60 @@ const ProfileScreen = () => {
       loadDoctorProfile();
     }, [loadDoctorProfile])
   );
+
+  const handlePickProfileImage = async () => {
+    if (isDoctor) {
+      Alert.alert('Managed By Admin', 'Doctor profile photos are currently managed from the doctor administration flow.');
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Please allow photo access to choose a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: [ImagePicker.MediaType.Images],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    const uriParts = asset.uri.split('/');
+    const fallbackName = `user-${userInfo?._id || 'profile'}.jpg`;
+    const name = asset.fileName || uriParts[uriParts.length - 1] || fallbackName;
+    const extension = name.split('.').pop()?.toLowerCase();
+    const type = asset.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
+    const formData = new FormData();
+    formData.append('profileImage', {
+      uri: asset.uri,
+      name,
+      type,
+    });
+
+    setLoading(true);
+    try {
+      await updateProfileImage(formData);
+      Alert.alert('Profile Picture Updated', 'Your profile picture has been updated successfully.');
+    } catch (error) {
+      Alert.alert(
+        'Upload Failed',
+        formatRequestErrorMessage(error, {
+          timeout: 'Profile image upload timed out. Please try again.',
+          network: 'Cannot reach the server right now. Please try again.',
+          default: 'Unable to upload your profile picture right now.',
+        })
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleUpdate = async () => {
     const normalizedName = normalizeName(name);
@@ -132,6 +187,11 @@ const ProfileScreen = () => {
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
           )}
+          {!isDoctor ? (
+            <TouchableOpacity style={styles.photoButton} onPress={handlePickProfileImage} activeOpacity={0.8}>
+              <Text style={styles.photoButtonText}>{profileImage ? 'Change Photo' : 'Add Photo'}</Text>
+            </TouchableOpacity>
+          ) : null}
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{userInfo?.role || 'Patient'}</Text>
           </View>
@@ -141,6 +201,13 @@ const ProfileScreen = () => {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>CONTACT DETAILS</Text>
+        <View style={styles.detailCard}>
+          <DetailRow label="Phone" value={phone || 'Not provided'} />
+          <View style={styles.divider} />
+          <DetailRow label="Address" value={address || 'Not provided'} valueStyle={styles.detailValueLeft} />
+        </View>
+
         {isDoctor ? (
           <>
             <Text style={styles.sectionLabel}>PROFESSIONAL PROFILE</Text>
@@ -226,6 +293,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   avatarText: { fontSize: 24, fontWeight: FONTS.bold, color: COLORS.white },
+  photoButton: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+  },
+  photoButtonText: {
+    fontSize: 11,
+    color: COLORS.white,
+    fontWeight: FONTS.semibold,
+    letterSpacing: 0.3,
+  },
   roleBadge: {
     marginTop: 8, backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 14, paddingVertical: 4, borderRadius: RADIUS.full,
@@ -264,6 +344,9 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     fontWeight: FONTS.bold,
     textAlign: 'right',
+  },
+  detailValueLeft: {
+    textAlign: 'left',
   },
   divider: { height: 1, backgroundColor: COLORS.divider, marginVertical: 11 },
   bioLabel: {

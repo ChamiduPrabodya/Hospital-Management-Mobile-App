@@ -30,10 +30,11 @@ exports.registerUser = asyncHandler(async (req, res) => {
   const name = String(req.body.name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
   const phone = normalizePhone(req.body.phone || '');
+  const address = String(req.body.address || '').trim();
   const password = String(req.body.password || '').trim();
 
-  if (!name || !email || !phone || !password) {
-    return res.status(400).json({ message: 'Name, email, phone, and password are required' });
+  if (!name || !email || !phone || !address || !password) {
+    return res.status(400).json({ message: 'Name, email, phone, address, and password are required' });
   }
 
   if (name.length < 2) {
@@ -73,6 +74,7 @@ exports.registerUser = asyncHandler(async (req, res) => {
     name,
     email,
     phone,
+    address,
     password: hashedPassword,
     role,
   });

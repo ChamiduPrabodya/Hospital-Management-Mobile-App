@@ -4,6 +4,8 @@ export const normalizeName = (name = '') => String(name).trim();
 
 export const normalizePhone = (phone = '') => String(phone).replace(/[^\d+]/g, '').trim();
 
+export const normalizeAddress = (address = '') => String(address).trim();
+
 export const normalizePassword = (password = '') => String(password).trim();
 
 export const validateEmail = (email) => {
@@ -86,11 +88,12 @@ export const getForgotPasswordResetErrors = ({ email, otp, password, confirmPass
   return errors;
 };
 
-export const getRegisterValidationErrors = ({ name, email, phone, password, confirmPassword }) => {
+export const getRegisterValidationErrors = ({ name, email, phone, address, password, confirmPassword }) => {
   const errors = {};
   const normalizedName = normalizeName(name);
   const normalizedEmail = normalizeEmail(email);
   const normalizedPhone = normalizePhone(phone);
+  const normalizedAddress = normalizeAddress(address);
   const normalizedPassword = normalizePassword(password);
   const normalizedConfirmPassword = normalizePassword(confirmPassword);
 
@@ -110,6 +113,10 @@ export const getRegisterValidationErrors = ({ name, email, phone, password, conf
     errors.phone = 'Phone number is required.';
   } else if (!validatePhone(normalizedPhone)) {
     errors.phone = 'Enter a valid phone number.';
+  }
+
+  if (!normalizedAddress) {
+    errors.address = 'Address is required.';
   }
 
   if (!normalizedPassword) {
