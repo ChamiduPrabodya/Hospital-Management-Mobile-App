@@ -14,37 +14,44 @@ const roleColor = (role) => {
   return { bg: '#FEF3C7', text: COLORS.warning };
 };
 
-const UserCard = ({ user, isCurrentUser, disabled, onDelete, isPatientView }) => {
+const UserCard = ({ user, isCurrentUser, disabled, onDelete, isPatientView, onPress }) => {
   const rc = roleColor(user.role);
 
   return (
     <View style={styles.card}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
-      </View>
-      <View style={styles.info}>
-        <Text style={styles.name}>{user.name || 'Unnamed user'}</Text>
-        <Text style={styles.email}>{user.email || 'No email'}</Text>
-        {isPatientView ? (
-          <>
-            <Text style={styles.detailText}>{user.phone || 'No phone number'}</Text>
-            <Text style={styles.detailText} numberOfLines={1}>
-              {user.address || 'No address'}
-            </Text>
-          </>
-        ) : null}
-        <View style={styles.metaRow}>
-          <View style={[styles.roleBadge, { backgroundColor: rc.bg }]}>
-            <Text style={[styles.roleText, { color: rc.text }]}>{user.role || 'patient'}</Text>
-          </View>
-          {isPatientView ? (
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{user.isActive === false ? 'Inactive' : 'Active'}</Text>
-            </View>
-          ) : null}
-          {isCurrentUser ? <Text style={styles.currentText}>Current admin</Text> : null}
+      <TouchableOpacity
+        style={styles.cardPressArea}
+        onPress={() => onPress?.(user)}
+        activeOpacity={isPatientView ? 0.8 : 1}
+        disabled={!onPress}
+      >
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
         </View>
-      </View>
+        <View style={styles.info}>
+          <Text style={styles.name}>{user.name || 'Unnamed user'}</Text>
+          <Text style={styles.email}>{user.email || 'No email'}</Text>
+          {isPatientView ? (
+            <>
+              <Text style={styles.detailText}>{user.phone || 'No phone number'}</Text>
+              <Text style={styles.detailText} numberOfLines={1}>
+                {user.address || 'No address'}
+              </Text>
+            </>
+          ) : null}
+          <View style={styles.metaRow}>
+            <View style={[styles.roleBadge, { backgroundColor: rc.bg }]}>
+              <Text style={[styles.roleText, { color: rc.text }]}>{user.role || 'patient'}</Text>
+            </View>
+            {isPatientView ? (
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>{user.isActive === false ? 'Inactive' : 'Active'}</Text>
+              </View>
+            ) : null}
+            {isCurrentUser ? <Text style={styles.currentText}>Current admin</Text> : null}
+          </View>
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity
         style={[styles.deleteBtn, (disabled || isCurrentUser) && styles.disabledBtn]}
         onPress={() => onDelete(user)}
@@ -141,6 +148,10 @@ const UserListScreen = ({ navigation, route }) => {
             disabled={actionLoadingId === item._id}
             onDelete={handleDeleteUser}
             isPatientView={isPatientView}
+            onPress={isPatientView ? (user) => navigation.navigate('PatientDetails', {
+              patientId: user._id,
+              patient: user,
+            }) : null}
           />
         )}
       />
@@ -159,6 +170,11 @@ const styles = StyleSheet.create({
     padding: 14,
     marginVertical: 6,
     ...SHADOW.card,
+  },
+  cardPressArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   avatar: {
     width: 42,
