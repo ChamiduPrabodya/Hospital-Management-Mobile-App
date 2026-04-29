@@ -6,7 +6,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { createDoctorApi, updateDoctorApi } from '../../api/doctorApi';
 import { uploadDoctorImageApi } from '../../api/uploadApi';
-import { validateEmail } from '../../utils/validators';
+import { validateEmail, validateStrongPassword } from '../../utils/validators';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -80,8 +80,8 @@ const DoctorFormScreen = ({ route, navigation }) => {
       Alert.alert('Error', 'Please enter a valid unique email for the doctor login');
       return;
     }
-    if (password.trim() && password.trim().length < 6) {
-      Alert.alert('Error', 'Doctor password must be at least 6 characters');
+    if (password.trim() && !validateStrongPassword(password.trim())) {
+      Alert.alert('Error', 'Doctor password must use 8+ characters with uppercase, lowercase, number, and symbol');
       return;
     }
     const exp = parseInt(experience);
@@ -164,13 +164,13 @@ const DoctorFormScreen = ({ route, navigation }) => {
             label={doctor ? 'New Password (optional)' : 'Password'}
             value={password}
             onChangeText={setPassword}
-            placeholder={doctor ? 'Leave blank to keep current password' : 'Minimum 6 characters'}
+            placeholder={doctor ? 'Leave blank to keep current password' : '8+ chars, upper, lower, number, symbol'}
             secureTextEntry
           />
           <Text style={styles.helpText}>
             {doctor
-              ? 'Changing the password here will update this doctor login.'
-              : 'This email and password will be used by the doctor to log in.'}
+              ? 'Changing the password here will update this doctor login. Use 8+ characters with uppercase, lowercase, number, and symbol.'
+              : 'This email and password will be used by the doctor to log in. Use 8+ characters with uppercase, lowercase, number, and symbol.'}
           </Text>
         </View>
 
