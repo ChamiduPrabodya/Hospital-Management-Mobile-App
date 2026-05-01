@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const atlasFallbacks = {
   'victoriahospital.4q585ys.mongodb.net': {
     hosts: [
@@ -44,39 +46,58 @@ const buildAtlasFallbackUri = (uri) => {
   }
 };
 
-const getMongoUris = () => {
-  const uris = [];
+const buildCandidates = () => {
+  const target = (process.env.MONGO_TARGET || (process.env.USE_LOCAL_MONGO === 'true' ? 'local' : 'auto')).toLowerCase();
+  const candidates = [];
+
+  if (process.env.MONGO_URI_ATLAS) {
+    candidates.push({ label: 'MONGO_URI_ATLAS', uri: process.env.MONGO_URI_ATLAS });
+  }
 
   if (process.env.MONGO_URI) {
-    uris.push({ label: 'MONGO_URI', uri: process.env.MONGO_URI });
+    if (process.env.MONGO_URI.startsWith('mongodb+srv://') || target !== 'local') {
+      candidates.push({ label: 'MONGO_URI', uri: process.env.MONGO_URI });
+    }
 
     const fallbackUri = buildAtlasFallbackUri(process.env.MONGO_URI);
     if (fallbackUri) {
-      uris.push({ label: 'Atlas direct connection fallback', uri: fallbackUri });
+      candidates.push({ label: 'Atlas direct connection fallback', uri: fallbackUri });
     }
   }
 
-  if ((!process.env.MONGO_URI || process.env.USE_LOCAL_MONGO === 'true') && process.env.MONGO_URI_LOCAL) {
-    uris.push({ label: 'MONGO_URI_LOCAL', uri: process.env.MONGO_URI_LOCAL });
+  const localCandidate = process.env.MONGO_URI_LOCAL
+    ? { label: 'MONGO_URI_LOCAL', uri: process.env.MONGO_URI_LOCAL }
+    : null;
+
+  if (target === 'local') {
+    return localCandidate ? [localCandidate] : [];
   }
 
-  return uris;
+  if (target === 'atlas') {
+    return candidates;
+  }
+
+  if (localCandidate) {
+    candidates.push(localCandidate);
+  }
+
+  return candidates;
 };
 
 const connectDB = async () => {
   const isProduction = process.env.NODE_ENV === 'production';
-  let retries = Number(process.env.MONGO_RETRIES || (isProduction ? 5 : 1));
+  let retries = Number(process.env.MONGO_RETRIES || (isProduction ? 5 : 2));
   const serverSelectionTimeoutMS = Number(process.env.MONGO_TIMEOUT_MS || (isProduction ? 10000 : 5000));
-  const uris = getMongoUris();
+  const candidates = buildCandidates();
 
-  if (uris.length === 0) {
-    throw new Error('MONGO_URI is missing in backend/.env');
+  if (candidates.length === 0) {
+    throw new Error('No MongoDB connection string is configured. Set MONGO_TARGET and a matching MongoDB URI.');
   }
 
   while (retries) {
     let lastError;
 
-    for (const { label, uri } of uris) {
+    for (const { label, uri } of candidates) {
       try {
         await mongoose.connect(uri, { serverSelectionTimeoutMS });
         console.log(`MongoDB Connected using ${label}`);
@@ -91,18 +112,11 @@ const connectDB = async () => {
 
     if (retries === 0) {
       console.error('MongoDB connection failed permanently');
-
-      if (!isProduction) {
-        console.error('Starting API without MongoDB because NODE_ENV is not production.');
-        console.error('Database routes will fail until MongoDB is reachable.');
-        return;
-      }
-
       throw lastError;
     }
 
     console.log('Retrying MongoDB connection...', retries);
-    await new Promise(res => setTimeout(res, 5000));
+    await wait(5000);
   }
 };
 
