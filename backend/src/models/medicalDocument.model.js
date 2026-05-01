@@ -8,6 +8,7 @@ const medicalDocumentSchema = new mongoose.Schema(
     title: { type: String, required: true },
     documentType: { type: String, required: true },
     fileUrl: { type: String, required: true },
+    fileAssetId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileAsset', default: null },
     fileName: { type: String },
     mimeType: { type: String },
     notes: { type: String },

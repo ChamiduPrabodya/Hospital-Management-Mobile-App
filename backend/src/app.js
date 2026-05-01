@@ -10,6 +10,7 @@ const appointmentRoutes = require('./routes/appointment.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const complaintRoutes = require('./routes/complaint.routes');
 const reportRoutes = require('./routes/report.routes');
+const fileRoutes = require('./routes/file.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const medicalDocumentRoutes = require('./routes/medicalDocument.routes');
 
@@ -27,6 +28,7 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/files', fileRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/medical-documents', medicalDocumentRoutes);
 

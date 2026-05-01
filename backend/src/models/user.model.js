@@ -34,6 +34,11 @@ const userSchema = new mongoose.Schema(
         profileImage: {
             type: String
         },
+        profileImageAssetId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "FileAsset",
+            default: null
+        },
         resetPasswordOtpHash: {
             type: String,
             default: null
