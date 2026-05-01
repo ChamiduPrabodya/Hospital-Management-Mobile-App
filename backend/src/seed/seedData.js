@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
+const connectDB = require('../config/db');
 
 const User = require('../models/user.model');
 const Doctor = require('../models/doctor.model');
@@ -36,15 +37,11 @@ const upsertService = (service) =>
   );
 
 const seed = async () => {
-  if (!process.env.MONGO_URI) {
-    throw new Error('MONGO_URI is missing in backend/.env');
-  }
-
   if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
     throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD are required in backend/.env');
   }
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await connectDB();
 
   const admin = await upsertUser({
     name: process.env.ADMIN_NAME || 'System Admin',

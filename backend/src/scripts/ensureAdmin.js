@@ -2,18 +2,15 @@ require('dotenv').config();
 
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const connectDB = require('../config/db');
 const User = require('../models/user.model');
 
 const ensureAdmin = async () => {
-  if (!process.env.MONGO_URI) {
-    throw new Error('MONGO_URI is missing in backend/.env');
-  }
-
   if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
     throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD are required in backend/.env');
   }
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await connectDB();
 
   const email = process.env.ADMIN_EMAIL.toLowerCase();
   const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
