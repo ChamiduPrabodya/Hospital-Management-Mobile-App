@@ -2,121 +2,91 @@ const mongoose = require('mongoose');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const atlasFallbacks = {
-  'victoriahospital.4q585ys.mongodb.net': {
-    hosts: [
-      'ac-twf43lm-shard-00-00.4q585ys.mongodb.net:27017',
-      'ac-twf43lm-shard-00-01.4q585ys.mongodb.net:27017',
-      'ac-twf43lm-shard-00-02.4q585ys.mongodb.net:27017',
-    ],
-    options: {
-      authSource: 'admin',
-      replicaSet: 'atlas-wqthmy-shard-0',
-      retryWrites: 'true',
-      ssl: 'true',
-      w: 'majority',
-    },
-  },
+const isDnsSrvError = (error) => {
+  const message = error?.message || '';
+
+  return (
+    message.includes('querySrv') ||
+    message.includes('ENOTFOUND') ||
+    message.includes('ECONNREFUSED') ||
+    message.includes('EAI_AGAIN')
+  );
 };
 
-const buildAtlasFallbackUri = (uri) => {
-  try {
-    const parsedUri = new URL(uri);
-    const fallback = atlasFallbacks[parsedUri.hostname];
-
-    if (parsedUri.protocol !== 'mongodb+srv:' || !fallback) {
-      return null;
-    }
-
-    const params = new URLSearchParams(parsedUri.search);
-
-    Object.entries(fallback.options).forEach(([key, value]) => {
-      if (!params.has(key)) {
-        params.set(key, value);
-      }
-    });
-
-    const credentials = parsedUri.username
-      ? `${parsedUri.username}:${parsedUri.password}@`
-      : '';
-
-    return `mongodb://${credentials}${fallback.hosts.join(',')}${parsedUri.pathname}?${params.toString()}`;
-  } catch {
-    return null;
-  }
-};
-
-const buildCandidates = () => {
-  const target = (process.env.MONGO_TARGET || (process.env.USE_LOCAL_MONGO === 'true' ? 'local' : 'auto')).toLowerCase();
-  const candidates = [];
-
-  if (process.env.MONGO_URI_ATLAS) {
-    candidates.push({ label: 'MONGO_URI_ATLAS', uri: process.env.MONGO_URI_ATLAS });
-  }
-
-  if (process.env.MONGO_URI) {
-    if (process.env.MONGO_URI.startsWith('mongodb+srv://') || target !== 'local') {
-      candidates.push({ label: 'MONGO_URI', uri: process.env.MONGO_URI });
-    }
-
-    const fallbackUri = buildAtlasFallbackUri(process.env.MONGO_URI);
-    if (fallbackUri) {
-      candidates.push({ label: 'Atlas direct connection fallback', uri: fallbackUri });
-    }
-  }
-
-  const localCandidate = process.env.MONGO_URI_LOCAL
-    ? { label: 'MONGO_URI_LOCAL', uri: process.env.MONGO_URI_LOCAL }
-    : null;
-
-  if (target === 'local') {
-    return localCandidate ? [localCandidate] : [];
-  }
-
-  if (target === 'atlas') {
-    return candidates;
-  }
-
-  if (localCandidate) {
-    candidates.push(localCandidate);
-  }
-
-  return candidates;
-};
-
-const connectDB = async () => {
-  const isProduction = process.env.NODE_ENV === 'production';
-  let retries = Number(process.env.MONGO_RETRIES || (isProduction ? 5 : 2));
-  const serverSelectionTimeoutMS = Number(process.env.MONGO_TIMEOUT_MS || (isProduction ? 10000 : 5000));
-  const candidates = buildCandidates();
-
-  if (candidates.length === 0) {
-    throw new Error('No MongoDB connection string is configured. Set MONGO_TARGET and a matching MongoDB URI.');
-  }
+const connectWithRetry = async (uri, label) => {
+  let retries = 5;
 
   while (retries) {
-    let lastError;
+    try {
+      await mongoose.connect(uri);
+      console.log(`MongoDB Connected (${label})`);
+      return true;
+    } catch (err) {
+      retries--;
 
-    for (const { label, uri } of candidates) {
-      try {
-        await mongoose.connect(uri, { serverSelectionTimeoutMS });
-        console.log(`MongoDB Connected using ${label}`);
-        return;
-      } catch (err) {
-        lastError = err;
-        console.log(`MongoDB connection failed using ${label} (${err.message})`);
+      if (retries === 0) {
+        throw err;
       }
+
+      console.log(`MongoDB connection failed (${label}: ${err.message}). Retrying...`, retries);
+      await wait(5000);
+    }
+  }
+
+  return false;
+};
+
+const getConnectionMode = () =>
+  (process.env.MONGO_URI_SOURCE || 'auto').trim().toLowerCase();
+
+const connectDB = async () => {
+  const primaryUri = process.env.MONGO_URI;
+  const fallbackUri = process.env.MONGO_URI_LOCAL;
+  const mode = getConnectionMode();
+
+  console.log(`MongoDB connection mode: ${mode}`);
+
+  if (!primaryUri && !fallbackUri) {
+    throw new Error('Missing MongoDB connection string. Set MONGO_URI or MONGO_URI_LOCAL.');
+  }
+
+  if (mode === 'local') {
+    if (!fallbackUri) {
+      throw new Error('MONGO_URI_SOURCE=local requires MONGO_URI_LOCAL to be set.');
     }
 
-    retries--;
+    await connectWithRetry(fallbackUri, 'MONGO_URI_LOCAL');
+    return;
+  }
 
-    if (retries === 0) {
-      console.error('MongoDB connection failed permanently');
-      throw lastError;
+  if (mode === 'atlas') {
+    if (!primaryUri) {
+      throw new Error('MONGO_URI_SOURCE=atlas requires MONGO_URI to be set.');
     }
 
-    console.log('Retrying MongoDB connection...', retries);
-    await wait(5000);
+    await connectWithRetry(primaryUri, 'MONGO_URI');
+    return;
+  }
+
+  if (primaryUri) {
+    try {
+      await connectWithRetry(primaryUri, 'MONGO_URI');
+      return;
+    } catch (err) {
+      if (!fallbackUri || !isDnsSrvError(err)) {
+        console.error('MongoDB connection failed permanently');
+        throw err;
+      }
+
+      console.warn(`Atlas connection failed with DNS/SRV lookup error. Falling back to local MongoDB: ${err.message}`);
+    }
+  }
+
+  try {
+    await connectWithRetry(fallbackUri, 'MONGO_URI_LOCAL');
+  } catch (err) {
+    console.error('MongoDB connection failed permanently');
+    throw err;
   }
 };
 
