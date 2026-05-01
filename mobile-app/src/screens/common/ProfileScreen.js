@@ -116,11 +116,6 @@ const ProfileScreen = () => {
   };
 
   const handlePickProfileImage = async () => {
-    if (isDoctor) {
-      Alert.alert('Managed By Admin', 'Doctor profile photos are currently managed from the doctor administration flow.');
-      return;
-    }
-
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -154,6 +149,7 @@ const ProfileScreen = () => {
 
       setLoading(true);
       await updateProfileImage(formData);
+      await loadDoctorProfile();
       Alert.alert('Profile Picture Updated', 'Your profile picture has been updated successfully.');
     } catch (error) {
       Alert.alert(
@@ -233,11 +229,9 @@ const ProfileScreen = () => {
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
           )}
-          {!isDoctor ? (
-            <TouchableOpacity style={styles.photoButton} onPress={handlePickProfileImage} activeOpacity={0.8}>
-              <Text style={styles.photoButtonText}>{profileImage ? 'Change Photo' : 'Add Photo'}</Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity style={styles.photoButton} onPress={handlePickProfileImage} activeOpacity={0.8}>
+            <Text style={styles.photoButtonText}>{profileImage ? 'Change Photo' : 'Add Photo'}</Text>
+          </TouchableOpacity>
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{userInfo?.role || 'Patient'}</Text>
           </View>
