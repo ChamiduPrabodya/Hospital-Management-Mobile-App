@@ -1,9 +1,8 @@
 const Appointment = require('../models/appointment.model');
 const MedicalDocument = require('../models/medicalDocument.model');
 const asyncHandler = require('../utils/asyncHandler');
+const { createFileAsset, deleteFileAsset } = require('../utils/fileAsset');
 const { validateObjectIdParam, isValidObjectId } = require('../utils/validateObjectId');
-
-const getOriginFromBaseUrl = (req) => `${req.protocol}://${req.get('host')}`;
 
 const doctorCanAccessPatient = async (doctorId, patientId, appointmentId = null) => {
   const filter = { doctorId, userId: patientId };
@@ -83,7 +82,7 @@ exports.uploadMedicalDocument = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'You can upload documents only for your own patients' });
   }
 
-  const fileUrl = `${getOriginFromBaseUrl(req)}/uploads/medical-documents/${req.file.filename}`;
+  const { asset, url: fileUrl } = await createFileAsset(req, req.file, 'medical-document');
   const document = await MedicalDocument.create({
     patientId,
     doctorId: req.user.doctorProfileId,
@@ -91,6 +90,7 @@ exports.uploadMedicalDocument = asyncHandler(async (req, res) => {
     title: String(title).trim(),
     documentType: String(documentType).trim(),
     fileUrl,
+    fileAssetId: asset._id,
     fileName: req.file.originalname,
     mimeType: req.file.mimetype,
     notes: String(notes || '').trim(),
@@ -121,6 +121,7 @@ exports.deleteMedicalDocument = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
+  await deleteFileAsset(document.fileAssetId);
   await document.deleteOne();
   res.status(200).json({ message: 'Medical document deleted successfully' });
 });

@@ -7,6 +7,7 @@ const doctorSchema = new mongoose.Schema(
     experience: { type: Number, required: true },
     availabilityStatus: { type: Boolean, default: true },
     image: { type: String },
+    imageAssetId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileAsset', default: null },
     description: { type: String },
     consultationFee: { type: Number },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
