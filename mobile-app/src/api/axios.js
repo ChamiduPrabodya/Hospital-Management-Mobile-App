@@ -35,8 +35,13 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      console.warn('Axios 401 response:', error.response.config?.url);
+    const status = error.response?.status;
+    const requestUrl = error.response?.config?.url || error.config?.url || '';
+    const normalizedUrl = String(requestUrl);
+    const isLoginRequest = normalizedUrl === '/auth/login' || normalizedUrl.endsWith('/auth/login');
+
+    if (status === 401 && !isLoginRequest) {
+      console.warn('Axios 401 response:', requestUrl);
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userInfo');
     }
