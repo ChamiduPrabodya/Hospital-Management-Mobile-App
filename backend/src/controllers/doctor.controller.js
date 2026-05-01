@@ -9,6 +9,14 @@ const { isStrongPassword } = require('../utils/userProfile');
 
 const isValidEmail = (email) => /\S+@\S+\.\S+/.test(String(email));
 
+const formatDoctorName = (name) => {
+  const trimmedName = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!trimmedName) return trimmedName;
+
+  const withoutTitle = trimmedName.replace(/^dr\.?\s+/i, '').trim();
+  return `Dr. ${withoutTitle || trimmedName}`;
+};
+
 exports.createDoctor = asyncHandler(async (req, res) => {
   const {
     name,
@@ -37,13 +45,15 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Doctor password must use 8+ characters with uppercase, lowercase, number, and symbol' });
   }
 
+  const doctorName = formatDoctorName(name);
+
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     return res.status(409).json({ message: 'Doctor email is already used by another account' });
   }
 
   const doctor = await Doctor.create({
-    name,
+    name: doctorName,
     specialization,
     experience,
     description,
@@ -54,7 +64,7 @@ exports.createDoctor = asyncHandler(async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
   const user = await User.create({
-    name,
+    name: doctorName,
     email: normalizedEmail,
     password: hashedPassword,
     role: 'doctor',
@@ -85,6 +95,99 @@ exports.getDoctorById = asyncHandler(async (req, res) => {
   res.status(200).json(doctor);
 });
 
+const ensureDoctorAccess = (req, res) => {
+  if (req.user.role !== 'doctor') {
+    res.status(403).json({ message: 'Only doctors can view patient history' });
+    return false;
+  }
+
+  if (!req.user.doctorProfileId) {
+    res.status(400).json({ message: 'Doctor account is not linked to a doctor profile' });
+    return false;
+  }
+
+  return true;
+};
+
+exports.getMyPatients = asyncHandler(async (req, res) => {
+  if (!ensureDoctorAccess(req, res)) return;
+
+  const appointments = await Appointment.find({ doctorId: req.user.doctorProfileId })
+    .sort({ appointmentDate: -1, appointmentTime: -1 })
+    .populate('userId', '-password')
+    .populate('serviceId', 'serviceName')
+    .lean();
+
+  const patientMap = new Map();
+
+  appointments.forEach((appointment) => {
+    const patient = appointment.userId;
+    if (!patient?._id) return;
+
+    const patientId = patient._id.toString();
+    const current = patientMap.get(patientId) || {
+      patient,
+      appointmentCount: 0,
+      lastAppointment: null,
+      lastServiceName: null,
+      hasMedicalNotes: false,
+    };
+
+    current.appointmentCount += 1;
+    current.hasMedicalNotes = current.hasMedicalNotes || Boolean(appointment.medicalNote?.text);
+
+    if (!current.lastAppointment) {
+      current.lastAppointment = appointment;
+      current.lastServiceName = appointment.serviceId?.serviceName || null;
+    }
+
+    patientMap.set(patientId, current);
+  });
+
+  res.status(200).json(Array.from(patientMap.values()));
+});
+
+exports.getPatientHistory = asyncHandler(async (req, res) => {
+  if (!ensureDoctorAccess(req, res)) return;
+  if (!validateObjectIdParam(res, req.params.patientId, 'patient ID')) return;
+
+  const appointments = await Appointment.find({
+    doctorId: req.user.doctorProfileId,
+    userId: req.params.patientId,
+  })
+    .sort({ appointmentDate: -1, appointmentTime: -1 })
+    .populate('doctorId')
+    .populate('serviceId')
+    .populate('userId', '-password')
+    .populate('medicalNote.addedBy', 'name role')
+    .lean();
+
+  if (appointments.length === 0) {
+    return res.status(403).json({ message: 'You are not authorized to view this patient history' });
+  }
+
+  const patient = appointments[0].userId;
+  const medicalNotes = appointments
+    .filter((appointment) => appointment.medicalNote?.text)
+    .map((appointment) => ({
+      appointmentId: appointment._id,
+      appointmentDate: appointment.appointmentDate,
+      appointmentTime: appointment.appointmentTime,
+      serviceName: appointment.serviceId?.serviceName || 'Service',
+      text: appointment.medicalNote.text,
+      addedBy: appointment.medicalNote.addedBy,
+      updatedAt: appointment.medicalNote.updatedAt,
+    }));
+
+  res.status(200).json({
+    patient,
+    appointmentCount: appointments.length,
+    medicalNoteCount: medicalNotes.length,
+    appointments,
+    medicalNotes,
+  });
+});
+
 exports.updateDoctor = asyncHandler(async (req, res) => {
   if (!validateObjectIdParam(res, req.params.id, 'doctor ID')) return;
 
@@ -94,7 +197,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
   }
 
   const updates = {};
-  if (req.body.name !== undefined) updates.name = req.body.name;
+  if (req.body.name !== undefined) updates.name = formatDoctorName(req.body.name);
   if (req.body.specialization !== undefined) updates.specialization = req.body.specialization;
   if (req.body.experience !== undefined) updates.experience = req.body.experience;
   if (req.body.description !== undefined) updates.description = req.body.description;
@@ -127,7 +230,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
       });
     }
 
-    if (req.body.name !== undefined) user.name = req.body.name;
+    if (req.body.name !== undefined) user.name = updates.name;
     if (req.body.image !== undefined) user.profileImage = req.body.image;
 
     if (req.body.email !== undefined) {

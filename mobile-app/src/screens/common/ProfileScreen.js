@@ -1,12 +1,13 @@
 import React, { useCallback, useState, useContext } from 'react';
 import {
   View, Text, StyleSheet, Alert, ScrollView,
-  TouchableOpacity, Platform, StatusBar, Image,
+  TouchableOpacity, Platform, StatusBar, Image, Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext } from '../../context/AuthContext';
 import { getDoctorByIdApi } from '../../api/doctorApi';
+import { getMedicalDocumentsApi } from '../../api/medicalDocumentApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -33,6 +34,12 @@ const formatLkr = (value) => (
     : 'N/A'
 );
 
+const getDocumentFileLabel = (document) => (
+  document?.mimeType === 'application/pdf' || document?.fileUrl?.toLowerCase().endsWith('.pdf')
+    ? 'PDF'
+    : 'Image'
+);
+
 const ProfileScreen = () => {
   const { userInfo, logout, updateProfile, updateProfileImage } = useContext(AuthContext);
   const [name,    setName]    = useState(userInfo?.name    || '');
@@ -42,6 +49,7 @@ const ProfileScreen = () => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [doctorProfile, setDoctorProfile] = useState(null);
+  const [medicalDocuments, setMedicalDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
   const isDoctor = userInfo?.role === 'doctor';
   const doctorProfileId = userInfo?.doctorProfileId?._id || userInfo?.doctorProfileId;
@@ -77,6 +85,24 @@ const ProfileScreen = () => {
     useCallback(() => {
       loadDoctorProfile();
     }, [loadDoctorProfile])
+  );
+
+  const loadMedicalDocuments = useCallback(async () => {
+    if (isDoctor) return;
+
+    try {
+      const res = await getMedicalDocumentsApi();
+      const data = Array.isArray(res.data) ? res.data : res.data?.data;
+      setMedicalDocuments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load medical documents:', error.response?.data || error.message);
+    }
+  }, [isDoctor]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMedicalDocuments();
+    }, [loadMedicalDocuments])
   );
 
   const updateFieldError = useCallback((field, nextValues) => {
@@ -116,11 +142,6 @@ const ProfileScreen = () => {
   };
 
   const handlePickProfileImage = async () => {
-    if (isDoctor) {
-      Alert.alert('Managed By Admin', 'Doctor profile photos are currently managed from the doctor administration flow.');
-      return;
-    }
-
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -129,7 +150,7 @@ const ProfileScreen = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -146,14 +167,18 @@ const ProfileScreen = () => {
       const extension = name.split('.').pop()?.toLowerCase();
       const type = asset.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
       const formData = new FormData();
-      formData.append('profileImage', {
-        uri: asset.uri,
-        name,
-        type,
-      });
+      formData.append(
+        'profileImage',
+        asset.file || {
+          uri: asset.uri,
+          name,
+          type,
+        }
+      );
 
       setLoading(true);
       await updateProfileImage(formData);
+      await loadDoctorProfile();
       Alert.alert('Profile Picture Updated', 'Your profile picture has been updated successfully.');
     } catch (error) {
       Alert.alert(
@@ -233,11 +258,9 @@ const ProfileScreen = () => {
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
           )}
-          {!isDoctor ? (
-            <TouchableOpacity style={styles.photoButton} onPress={handlePickProfileImage} activeOpacity={0.8}>
-              <Text style={styles.photoButtonText}>{profileImage ? 'Change Photo' : 'Add Photo'}</Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity style={styles.photoButton} onPress={handlePickProfileImage} activeOpacity={0.8}>
+            <Text style={styles.photoButtonText}>{profileImage ? 'Change Photo' : 'Add Photo'}</Text>
+          </TouchableOpacity>
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{userInfo?.role || 'Patient'}</Text>
           </View>
@@ -289,6 +312,30 @@ const ProfileScreen = () => {
           <CustomInput label="Phone Number"  value={phone}   onChangeText={handlePhoneChange} onBlur={() => handleFieldBlur('phone')} placeholder="Your phone" keyboardType="phone-pad" errorMessage={errors.phone} />
           <CustomInput label="Address"       value={address} onChangeText={setAddress} placeholder="Your address" />
         </View>
+
+        {!isDoctor ? (
+          <>
+            <Text style={styles.sectionLabel}>MEDICAL DOCUMENTS</Text>
+            <View style={styles.detailCard}>
+              {medicalDocuments.length > 0 ? medicalDocuments.map((document) => (
+                <TouchableOpacity
+                  key={document._id}
+                  style={styles.documentRow}
+                  onPress={() => Linking.openURL(document.fileUrl)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.documentTitle}>{document.title}</Text>
+                  <Text style={styles.documentMeta}>
+                    {document.documentType} | {getDocumentFileLabel(document)} | {document.doctorId?.name || 'Doctor'}
+                  </Text>
+                  <Text style={styles.documentHint}>Tap to open file</Text>
+                </TouchableOpacity>
+              )) : (
+                <Text style={styles.emptyText}>No medical documents have been uploaded yet.</Text>
+              )}
+            </View>
+          </>
+        ) : null}
 
         <CustomButton title="Save Changes" onPress={handleUpdate} style={styles.saveBtn} />
 
@@ -404,6 +451,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textMuted,
     lineHeight: 20,
+  },
+  documentRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  documentTitle: {
+    fontSize: 13,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.bold,
+  },
+  documentMeta: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  documentHint: {
+    fontSize: 11,
+    color: COLORS.tealStrong,
+    fontWeight: FONTS.semibold,
+    marginTop: 6,
   },
   saveBtn:    { marginBottom: 10 },
   logoutBtn: {

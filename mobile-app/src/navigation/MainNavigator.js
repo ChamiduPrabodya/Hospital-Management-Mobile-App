@@ -16,6 +16,8 @@ import HomeScreen              from '../screens/common/HomeScreen';
 import DoctorListScreen        from '../screens/doctors/DoctorListScreen';
 import DoctorDetailsScreen     from '../screens/doctors/DoctorDetailsScreen';
 import DoctorFormScreen        from '../screens/doctors/DoctorFormScreen';
+import DoctorPatientsScreen    from '../screens/doctors/DoctorPatientsScreen';
+import DoctorPatientHistoryScreen from '../screens/doctors/DoctorPatientHistoryScreen';
 import ServiceListScreen       from '../screens/services/ServiceListScreen';
 import ServiceFormScreen       from '../screens/services/ServiceFormScreen';
 import AppointmentListScreen   from '../screens/appointments/AppointmentListScreen';
@@ -31,6 +33,7 @@ import ReportDetailsScreen     from '../screens/reports/ReportDetailsScreen';
 import ProfileScreen           from '../screens/common/ProfileScreen';
 import AdminDashboardScreen    from '../screens/admin/AdminDashboardScreen';
 import UserListScreen          from '../screens/admin/UserListScreen';
+import PatientDetailsScreen    from '../screens/admin/PatientDetailsScreen';
 import { AuthContext }         from '../context/AuthContext';
 
 // ── Design tokens (mirrors your theme) ───────────────────────────────────────
@@ -266,6 +269,7 @@ const AdminIcon = ({ color, size = 22 }) => (
 const ICON_MAP = {
   Home:         HomeIcon,
   Doctors:      DoctorIcon,
+  Patients:     ProfileIcon,
   Appointments: CalendarIcon,
   Services:     ServiceIcon,
   Payments:     PaymentIcon,
@@ -399,6 +403,7 @@ function Tabs() {
     >
       <Tab.Screen name="Home"         component={HomeScreen} />
       {!isDoctor ? <Tab.Screen name="Doctors" component={DoctorListScreen} /> : null}
+      {isDoctor ? <Tab.Screen name="Patients" component={DoctorPatientsScreen} /> : null}
       <Tab.Screen name="Appointments" component={AppointmentListScreen} />
       {!isDoctor ? <Tab.Screen name="Services" component={ServiceListScreen} /> : null}
       {!isDoctor ? <Tab.Screen name="Payments" component={PaymentListScreen} /> : null}
@@ -417,6 +422,7 @@ export default function MainNavigator() {
       <Stack.Screen name="Tabs"                component={Tabs} />
       <Stack.Screen name="DoctorDetails"       component={DoctorDetailsScreen} />
       <Stack.Screen name="DoctorForm"          component={DoctorFormScreen} />
+      <Stack.Screen name="DoctorPatientHistory" component={DoctorPatientHistoryScreen} />
       <Stack.Screen name="ServiceForm"         component={ServiceFormScreen} />
       <Stack.Screen name="AppointmentBooking"  component={AppointmentBookingScreen} />
       <Stack.Screen name="AppointmentDetails"  component={AppointmentDetailsScreen} />
@@ -425,6 +431,7 @@ export default function MainNavigator() {
       <Stack.Screen name="ReportGenerate"      component={ReportGenerateScreen} />
       <Stack.Screen name="ReportDetails"       component={ReportDetailsScreen} />
       <Stack.Screen name="Users"               component={UserListScreen} />
+      <Stack.Screen name="PatientDetails"      component={PatientDetailsScreen} />
     </Stack.Navigator>
   );
 }

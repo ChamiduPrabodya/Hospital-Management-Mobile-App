@@ -2,91 +2,122 @@ const mongoose = require('mongoose');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const getAtlasUri = () => {
-  if (process.env.MONGO_URI_ATLAS) {
-    return process.env.MONGO_URI_ATLAS;
-  }
-
-  if (process.env.MONGO_URI?.startsWith('mongodb+srv://')) {
-    return process.env.MONGO_URI;
-  }
-
-  return null;
+const atlasFallbacks = {
+  'victoriahospital.4q585ys.mongodb.net': {
+    hosts: [
+      'ac-twf43lm-shard-00-00.4q585ys.mongodb.net:27017',
+      'ac-twf43lm-shard-00-01.4q585ys.mongodb.net:27017',
+      'ac-twf43lm-shard-00-02.4q585ys.mongodb.net:27017',
+    ],
+    options: {
+      authSource: 'admin',
+      replicaSet: 'atlas-wqthmy-shard-0',
+      retryWrites: 'true',
+      ssl: 'true',
+      w: 'majority',
+    },
+  },
 };
 
-const getLocalUri = () => {
-  if (process.env.MONGO_URI_LOCAL) {
-    return process.env.MONGO_URI_LOCAL;
-  }
+const buildAtlasFallbackUri = (uri) => {
+  try {
+    const parsedUri = new URL(uri);
+    const fallback = atlasFallbacks[parsedUri.hostname];
 
-  if (process.env.MONGO_URI?.startsWith('mongodb://')) {
-    return process.env.MONGO_URI;
-  }
+    if (parsedUri.protocol !== 'mongodb+srv:' || !fallback) {
+      return null;
+    }
 
-  return null;
+    const params = new URLSearchParams(parsedUri.search);
+
+    Object.entries(fallback.options).forEach(([key, value]) => {
+      if (!params.has(key)) {
+        params.set(key, value);
+      }
+    });
+
+    const credentials = parsedUri.username
+      ? `${parsedUri.username}:${parsedUri.password}@`
+      : '';
+
+    return `mongodb://${credentials}${fallback.hosts.join(',')}${parsedUri.pathname}?${params.toString()}`;
+  } catch {
+    return null;
+  }
 };
 
 const buildCandidates = () => {
-  const target = (process.env.MONGO_TARGET || 'auto').toLowerCase();
-  const atlasUri = getAtlasUri();
-  const localUri = getLocalUri();
+  const target = (process.env.MONGO_TARGET || (process.env.USE_LOCAL_MONGO === 'true' ? 'local' : 'auto')).toLowerCase();
+  const candidates = [];
+
+  if (process.env.MONGO_URI_ATLAS) {
+    candidates.push({ label: 'MONGO_URI_ATLAS', uri: process.env.MONGO_URI_ATLAS });
+  }
+
+  if (process.env.MONGO_URI) {
+    if (process.env.MONGO_URI.startsWith('mongodb+srv://') || target !== 'local') {
+      candidates.push({ label: 'MONGO_URI', uri: process.env.MONGO_URI });
+    }
+
+    const fallbackUri = buildAtlasFallbackUri(process.env.MONGO_URI);
+    if (fallbackUri) {
+      candidates.push({ label: 'Atlas direct connection fallback', uri: fallbackUri });
+    }
+  }
+
+  const localCandidate = process.env.MONGO_URI_LOCAL
+    ? { label: 'MONGO_URI_LOCAL', uri: process.env.MONGO_URI_LOCAL }
+    : null;
 
   if (target === 'local') {
-    return localUri ? [{ label: 'local', uri: localUri, retries: 1 }] : [];
+    return localCandidate ? [localCandidate] : [];
   }
 
   if (target === 'atlas') {
-    return atlasUri ? [{ label: 'atlas', uri: atlasUri, retries: 5 }] : [];
+    return candidates;
   }
 
-  const candidates = [];
-
-  if (atlasUri) {
-    candidates.push({ label: 'atlas', uri: atlasUri, retries: 2 });
-  }
-
-  if (localUri) {
-    candidates.push({ label: 'local', uri: localUri, retries: 1 });
+  if (localCandidate) {
+    candidates.push(localCandidate);
   }
 
   return candidates;
 };
 
 const connectDB = async () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  let retries = Number(process.env.MONGO_RETRIES || (isProduction ? 5 : 2));
+  const serverSelectionTimeoutMS = Number(process.env.MONGO_TIMEOUT_MS || (isProduction ? 10000 : 5000));
   const candidates = buildCandidates();
 
   if (candidates.length === 0) {
     throw new Error('No MongoDB connection string is configured. Set MONGO_TARGET and a matching MongoDB URI.');
   }
 
-  let lastError;
+  while (retries) {
+    let lastError;
 
-  for (const candidate of candidates) {
-    let retries = candidate.retries;
-
-    while (retries) {
+    for (const { label, uri } of candidates) {
       try {
-        await mongoose.connect(candidate.uri, {
-          serverSelectionTimeoutMS: 5000,
-        });
-        console.log(`MongoDB Connected (${candidate.label})`);
+        await mongoose.connect(uri, { serverSelectionTimeoutMS });
+        console.log(`MongoDB Connected using ${label}`);
         return;
       } catch (err) {
         lastError = err;
-        console.log(`MongoDB connection failed (${candidate.label}: ${err.message}). Retrying...`, retries);
-        retries--;
-
-        if (retries === 0) {
-          break;
-        }
-
-        await wait(3000);
+        console.log(`MongoDB connection failed using ${label} (${err.message})`);
       }
     }
-  }
 
-  console.error('MongoDB connection failed permanently');
-  throw lastError;
+    retries--;
+
+    if (retries === 0) {
+      console.error('MongoDB connection failed permanently');
+      throw lastError;
+    }
+
+    console.log('Retrying MongoDB connection...', retries);
+    await wait(5000);
+  }
 };
 
 module.exports = connectDB;

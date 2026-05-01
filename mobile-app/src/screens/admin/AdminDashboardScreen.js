@@ -12,7 +12,7 @@ const ADMIN_CARDS = [
   { key: 'ReportGenerate', label: 'Generate Report', sub: 'Create custom report', color: '#fef2f2', accent: COLORS.danger },
   { key: 'Appointments', label: 'Appointments', sub: 'Manage bookings', color: COLORS.tealFaint, accent: COLORS.tealStrong },
   { key: 'Complaints', label: 'Complaints', sub: 'Handle complaints', color: '#fff7ed', accent: COLORS.warning },
-  { key: 'Users', label: 'Users', sub: 'Manage user accounts', color: COLORS.tealFaint, accent: COLORS.tealBright },
+  { key: 'Users', label: 'Patients', sub: 'View patient accounts', color: COLORS.tealFaint, accent: COLORS.tealBright, params: { role: 'patient' } },
 ];
 
 const AdminCard = ({ item, onPress }) => (
@@ -76,7 +76,11 @@ const AdminDashboardScreen = ({ navigation }) => {
       >
         <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
         {ADMIN_CARDS.map((item) => (
-          <AdminCard key={item.key} item={item} onPress={() => navigation.navigate(item.key)} />
+          <AdminCard
+            key={`${item.key}-${item.label}`}
+            item={item}
+            onPress={() => navigation.navigate(item.key, item.params)}
+          />
         ))}
 
         <View style={styles.dashboardSection}>
