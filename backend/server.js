@@ -1,10 +1,12 @@
 const connectDB = require('./src/config/db');
+const ensureDemoAuthData = require('./src/bootstrap/ensureDemoAuthData');
 const app = require('./src/app');
 
 require('dotenv').config({ override: true });
 
 const start = async () => {
   await connectDB();
+  await ensureDemoAuthData();
   app.get('/', (req, res) => res.send('API Running'));
 
   const PORT = process.env.PORT || 5000;
