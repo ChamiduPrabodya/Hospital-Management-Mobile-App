@@ -7,9 +7,12 @@ import {
   Image,
   StatusBar,
   Alert,
+  TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getUserByIdApi } from '../../api/userApi';
+import { getMedicalDocumentsApi } from '../../api/medicalDocumentApi';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ScreenHeader from '../../components/ScreenHeader';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
@@ -32,6 +35,7 @@ const formatDate = (value) => {
 
 const PatientDetailsScreen = ({ route, navigation }) => {
   const [patient, setPatient] = useState(route.params?.patient || null);
+  const [medicalDocuments, setMedicalDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const loadPatient = useCallback(async () => {
@@ -52,10 +56,24 @@ const PatientDetailsScreen = ({ route, navigation }) => {
     }
   }, [patient?._id, route.params?.patientId]);
 
+  const loadMedicalDocuments = useCallback(async () => {
+    const patientId = route.params?.patientId || patient?._id;
+    if (!patientId) return;
+
+    try {
+      const res = await getMedicalDocumentsApi(patientId);
+      const data = Array.isArray(res.data) ? res.data : res.data?.data;
+      setMedicalDocuments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load patient medical documents:', error.response?.data || error.message);
+    }
+  }, [patient?._id, route.params?.patientId]);
+
   useFocusEffect(
     useCallback(() => {
       loadPatient();
-    }, [loadPatient])
+      loadMedicalDocuments();
+    }, [loadMedicalDocuments, loadPatient])
   );
 
   if (loading && !patient) {
@@ -140,6 +158,26 @@ const PatientDetailsScreen = ({ route, navigation }) => {
               <DetailRow label="Deactivated" value={formatDate(patient.deletedAt)} />
             </>
           ) : null}
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Medical Documents</Text>
+          <View style={styles.divider} />
+          {medicalDocuments.length > 0 ? medicalDocuments.map((document) => (
+            <TouchableOpacity
+              key={document._id}
+              style={styles.documentRow}
+              onPress={() => Linking.openURL(document.fileUrl)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.documentTitle}>{document.title}</Text>
+              <Text style={styles.documentMeta}>
+                {document.documentType} | {document.doctorId?.name || 'Doctor'}
+              </Text>
+            </TouchableOpacity>
+          )) : (
+            <Text style={styles.emptyText}>No medical documents uploaded yet.</Text>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -260,6 +298,27 @@ const styles = StyleSheet.create({
   },
   compactValue: {
     fontSize: 12,
+  },
+  documentRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  documentTitle: {
+    fontSize: 13,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.bold,
+  },
+  documentMeta: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    lineHeight: 20,
   },
 });
 
