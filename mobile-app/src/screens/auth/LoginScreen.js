@@ -278,10 +278,14 @@ const LoginScreen = ({ navigation, route }) => {
         network: `Cannot reach the login server at ${BASE_URL}. Make sure the backend is running and your device can reach this address.`,
         default: 'Unable to sign in right now. Please try again.',
       });
+      const responseStatus = error?.response?.status;
+      const debugMessage = responseStatus === 401
+        ? `${message}\n\nServer: ${BASE_URL}`
+        : message;
 
       Alert.alert(
         'Sign In Failed',
-        message
+        debugMessage
       );
     } finally {
       setLoading(false);
