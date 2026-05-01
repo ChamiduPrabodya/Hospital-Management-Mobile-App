@@ -9,6 +9,14 @@ const { isStrongPassword } = require('../utils/userProfile');
 
 const isValidEmail = (email) => /\S+@\S+\.\S+/.test(String(email));
 
+const formatDoctorName = (name) => {
+  const trimmedName = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!trimmedName) return trimmedName;
+
+  const withoutTitle = trimmedName.replace(/^dr\.?\s+/i, '').trim();
+  return `Dr. ${withoutTitle || trimmedName}`;
+};
+
 exports.createDoctor = asyncHandler(async (req, res) => {
   const {
     name,
@@ -37,13 +45,15 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Doctor password must use 8+ characters with uppercase, lowercase, number, and symbol' });
   }
 
+  const doctorName = formatDoctorName(name);
+
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     return res.status(409).json({ message: 'Doctor email is already used by another account' });
   }
 
   const doctor = await Doctor.create({
-    name,
+    name: doctorName,
     specialization,
     experience,
     description,
@@ -54,7 +64,7 @@ exports.createDoctor = asyncHandler(async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
   const user = await User.create({
-    name,
+    name: doctorName,
     email: normalizedEmail,
     password: hashedPassword,
     role: 'doctor',
@@ -187,7 +197,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
   }
 
   const updates = {};
-  if (req.body.name !== undefined) updates.name = req.body.name;
+  if (req.body.name !== undefined) updates.name = formatDoctorName(req.body.name);
   if (req.body.specialization !== undefined) updates.specialization = req.body.specialization;
   if (req.body.experience !== undefined) updates.experience = req.body.experience;
   if (req.body.description !== undefined) updates.description = req.body.description;
@@ -220,7 +230,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
       });
     }
 
-    if (req.body.name !== undefined) user.name = req.body.name;
+    if (req.body.name !== undefined) user.name = updates.name;
     if (req.body.image !== undefined) user.profileImage = req.body.image;
 
     if (req.body.email !== undefined) {

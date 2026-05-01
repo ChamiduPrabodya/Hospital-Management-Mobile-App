@@ -37,7 +37,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [ImagePicker.MediaType.Images],
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -61,11 +61,14 @@ const DoctorFormScreen = ({ route, navigation }) => {
 
     const formData = new FormData();
     formData.append('doctorId', doctorId);
-    formData.append('doctorImage', {
-      uri: selectedImage.uri,
-      name,
-      type,
-    });
+    formData.append(
+      'doctorImage',
+      selectedImage.file || {
+        uri: selectedImage.uri,
+        name,
+        type,
+      }
+    );
 
     await uploadDoctorImageApi(formData);
   };

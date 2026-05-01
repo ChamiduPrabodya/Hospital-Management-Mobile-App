@@ -1,7 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity, Linking } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { getPatientHistoryApi } from '../../api/doctorApi';
+import { getMedicalDocumentsApi, uploadMedicalDocumentApi } from '../../api/medicalDocumentApi';
+import CustomInput from '../../components/CustomInput';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ScreenHeader from '../../components/ScreenHeader';
 import { COLORS, FONTS, RADIUS, SHADOW, statusColor } from '../../theme';
@@ -21,6 +25,16 @@ const DetailRow = ({ label, value }) => (
     <Text style={styles.detailValue}>{value}</Text>
   </View>
 );
+
+const getDocumentMimeType = (asset, fallbackType = 'image/jpeg') => {
+  const fileName = asset?.fileName || asset?.name || '';
+  const extension = fileName.split('.').pop()?.toLowerCase();
+
+  if (asset?.mimeType) return asset.mimeType;
+  if (extension === 'pdf') return 'application/pdf';
+  if (extension === 'png') return 'image/png';
+  return fallbackType;
+};
 
 const AppointmentItem = ({ appointment }) => {
   const colors = statusColor(appointment.status);
@@ -52,7 +66,12 @@ const AppointmentItem = ({ appointment }) => {
 const DoctorPatientHistoryScreen = ({ route, navigation }) => {
   const patientId = route.params?.patientId;
   const [history, setHistory] = useState(null);
+  const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [docTitle, setDocTitle] = useState('');
+  const [docType, setDocType] = useState('Medical Report');
+  const [docNotes, setDocNotes] = useState('');
 
   const loadHistory = useCallback(async () => {
     if (!patientId) return;
@@ -60,6 +79,9 @@ const DoctorPatientHistoryScreen = ({ route, navigation }) => {
     try {
       const res = await getPatientHistoryApi(patientId);
       setHistory(res.data?.data || res.data);
+      const documentsRes = await getMedicalDocumentsApi(patientId);
+      const documentData = Array.isArray(documentsRes.data) ? documentsRes.data : documentsRes.data?.data;
+      setDocuments(Array.isArray(documentData) ? documentData : []);
     } catch (error) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to load patient history');
     } finally {
@@ -72,6 +94,92 @@ const DoctorPatientHistoryScreen = ({ route, navigation }) => {
       loadHistory();
     }, [loadHistory])
   );
+
+  const uploadSelectedDocument = async (asset, fallbackName, fallbackType) => {
+    const title = docTitle.trim();
+    const documentType = docType.trim();
+    const uriParts = asset.uri.split('/');
+    const fileName = asset.fileName || asset.name || uriParts[uriParts.length - 1] || fallbackName;
+    const type = getDocumentMimeType(asset, fallbackType);
+    const latestAppointment = appointments[0];
+
+    const formData = new FormData();
+    formData.append('patientId', patientId);
+    if (latestAppointment?._id) formData.append('appointmentId', latestAppointment._id);
+    formData.append('title', title);
+    formData.append('documentType', documentType);
+    formData.append('notes', docNotes.trim());
+    formData.append(
+      'medicalDocument',
+      asset.file || {
+        uri: asset.uri,
+        name: fileName,
+        type,
+      }
+    );
+
+    setUploading(true);
+    await uploadMedicalDocumentApi(formData);
+    setDocTitle('');
+    setDocNotes('');
+    await loadHistory();
+    Alert.alert('Uploaded', 'Medical document has been added to the patient history.');
+  };
+
+  const pickDocumentImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Please allow photo access to choose a medical document.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.9,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    await uploadSelectedDocument(result.assets[0], `medical-document-${patientId}.jpg`, 'image/jpeg');
+  };
+
+  const pickDocumentPdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    await uploadSelectedDocument(result.assets[0], `medical-document-${patientId}.pdf`, 'application/pdf');
+  };
+
+  const handleUploadDocument = () => {
+    const title = docTitle.trim();
+    const documentType = docType.trim();
+    if (!title || !documentType) {
+      Alert.alert('Missing Details', 'Please add a document title and type.');
+      return;
+    }
+
+    Alert.alert('Upload Medical Document', 'Choose the file type to upload.', [
+      { text: 'Image', onPress: () => pickAndUploadDocument(pickDocumentImage) },
+      { text: 'PDF', onPress: () => pickAndUploadDocument(pickDocumentPdf) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const pickAndUploadDocument = async (picker) => {
+    try {
+      await picker();
+    } catch (error) {
+      Alert.alert('Upload Failed', error.response?.data?.message || error.message || 'Could not upload document');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (loading && !history) return <LoadingSpinner message="Loading patient history..." />;
 
@@ -110,6 +218,58 @@ const DoctorPatientHistoryScreen = ({ route, navigation }) => {
         )) : (
           <View style={styles.card}>
             <Text style={styles.emptyText}>No medical notes have been added for this patient yet.</Text>
+          </View>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Medical Documents</Text>
+          <Text style={styles.sectionCount}>{documents.length}</Text>
+        </View>
+        <View style={styles.card}>
+          <CustomInput
+            label="Document Title"
+            value={docTitle}
+            onChangeText={setDocTitle}
+            placeholder="e.g. ECG report"
+          />
+          <CustomInput
+            label="Document Type"
+            value={docType}
+            onChangeText={setDocType}
+            placeholder="e.g. Lab Report"
+          />
+          <CustomInput
+            label="Notes"
+            value={docNotes}
+            onChangeText={setDocNotes}
+            placeholder="Short note about this document"
+            multiline
+            numberOfLines={3}
+          />
+          <TouchableOpacity
+            style={[styles.uploadBtn, uploading && styles.uploadBtnDisabled]}
+            onPress={handleUploadDocument}
+            disabled={uploading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.uploadBtnText}>{uploading ? 'Uploading...' : 'Upload Image or PDF'}</Text>
+          </TouchableOpacity>
+        </View>
+        {documents.length > 0 ? documents.map((document) => (
+          <TouchableOpacity
+            key={document._id}
+            style={styles.card}
+            onPress={() => Linking.openURL(document.fileUrl)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.noteDate}>{document.documentType} | {formatDate(document.createdAt)}</Text>
+            <Text style={styles.documentTitle}>{document.title}</Text>
+            {document.notes ? <Text style={styles.noteText}>{document.notes}</Text> : null}
+            <Text style={styles.noteMeta}>Tap to open file</Text>
+          </TouchableOpacity>
+        )) : (
+          <View style={styles.card}>
+            <Text style={styles.emptyText}>No medical documents have been uploaded for this patient yet.</Text>
           </View>
         )}
 
@@ -162,7 +322,17 @@ const styles = StyleSheet.create({
   noteDate: { fontSize: 12, color: COLORS.tealStrong, fontWeight: FONTS.bold, marginBottom: 8 },
   noteText: { fontSize: 13, color: COLORS.textPrimary, lineHeight: 20 },
   noteMeta: { fontSize: 11, color: COLORS.textMuted, marginTop: 8 },
+  documentTitle: { fontSize: 15, color: COLORS.navyDeep, fontWeight: FONTS.bold, marginBottom: 8 },
   emptyText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 20 },
+  uploadBtn: {
+    backgroundColor: COLORS.tealStrong,
+    borderRadius: RADIUS.md,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  uploadBtnDisabled: { opacity: 0.7 },
+  uploadBtnText: { color: COLORS.white, fontSize: 13, fontWeight: FONTS.bold },
   timelineCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.md,

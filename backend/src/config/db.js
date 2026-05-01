@@ -36,7 +36,8 @@ const connectWithRetry = async (uri, label) => {
   return false;
 };
 
-const getConnectionMode = () => (process.env.MONGO_URI_SOURCE || 'auto').trim().toLowerCase();
+const getConnectionMode = () =>
+  (process.env.MONGO_URI_SOURCE || 'auto').trim().toLowerCase();
 
 const connectDB = async () => {
   const primaryUri = process.env.MONGO_URI;
