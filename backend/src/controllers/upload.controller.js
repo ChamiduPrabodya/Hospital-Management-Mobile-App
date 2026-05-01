@@ -61,5 +61,14 @@ exports.uploadUserProfileImage = asyncHandler(async (req, res) => {
   user.profileImage = imageUrl;
   await user.save();
 
-  res.status(200).json({ imageUrl, user });
+  let doctor = null;
+  if (user.role === 'doctor' && user.doctorProfileId) {
+    doctor = await Doctor.findById(user.doctorProfileId);
+    if (doctor) {
+      doctor.image = imageUrl;
+      await doctor.save();
+    }
+  }
+
+  res.status(200).json({ imageUrl, user, doctor });
 });
