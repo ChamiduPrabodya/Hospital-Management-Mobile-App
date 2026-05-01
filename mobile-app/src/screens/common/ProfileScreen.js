@@ -124,7 +124,7 @@ const ProfileScreen = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -141,11 +141,14 @@ const ProfileScreen = () => {
       const extension = name.split('.').pop()?.toLowerCase();
       const type = asset.mimeType || (extension === 'png' ? 'image/png' : 'image/jpeg');
       const formData = new FormData();
-      formData.append('profileImage', {
-        uri: asset.uri,
-        name,
-        type,
-      });
+      formData.append(
+        'profileImage',
+        asset.file || {
+          uri: asset.uri,
+          name,
+          type,
+        }
+      );
 
       setLoading(true);
       await updateProfileImage(formData);
