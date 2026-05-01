@@ -16,6 +16,8 @@ import HomeScreen              from '../screens/common/HomeScreen';
 import DoctorListScreen        from '../screens/doctors/DoctorListScreen';
 import DoctorDetailsScreen     from '../screens/doctors/DoctorDetailsScreen';
 import DoctorFormScreen        from '../screens/doctors/DoctorFormScreen';
+import DoctorPatientsScreen    from '../screens/doctors/DoctorPatientsScreen';
+import DoctorPatientHistoryScreen from '../screens/doctors/DoctorPatientHistoryScreen';
 import ServiceListScreen       from '../screens/services/ServiceListScreen';
 import ServiceFormScreen       from '../screens/services/ServiceFormScreen';
 import AppointmentListScreen   from '../screens/appointments/AppointmentListScreen';
@@ -267,6 +269,7 @@ const AdminIcon = ({ color, size = 22 }) => (
 const ICON_MAP = {
   Home:         HomeIcon,
   Doctors:      DoctorIcon,
+  Patients:     ProfileIcon,
   Appointments: CalendarIcon,
   Services:     ServiceIcon,
   Payments:     PaymentIcon,
@@ -400,6 +403,7 @@ function Tabs() {
     >
       <Tab.Screen name="Home"         component={HomeScreen} />
       {!isDoctor ? <Tab.Screen name="Doctors" component={DoctorListScreen} /> : null}
+      {isDoctor ? <Tab.Screen name="Patients" component={DoctorPatientsScreen} /> : null}
       <Tab.Screen name="Appointments" component={AppointmentListScreen} />
       {!isDoctor ? <Tab.Screen name="Services" component={ServiceListScreen} /> : null}
       {!isDoctor ? <Tab.Screen name="Payments" component={PaymentListScreen} /> : null}
@@ -418,6 +422,7 @@ export default function MainNavigator() {
       <Stack.Screen name="Tabs"                component={Tabs} />
       <Stack.Screen name="DoctorDetails"       component={DoctorDetailsScreen} />
       <Stack.Screen name="DoctorForm"          component={DoctorFormScreen} />
+      <Stack.Screen name="DoctorPatientHistory" component={DoctorPatientHistoryScreen} />
       <Stack.Screen name="ServiceForm"         component={ServiceFormScreen} />
       <Stack.Screen name="AppointmentBooking"  component={AppointmentBookingScreen} />
       <Stack.Screen name="AppointmentDetails"  component={AppointmentDetailsScreen} />

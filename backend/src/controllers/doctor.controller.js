@@ -85,6 +85,99 @@ exports.getDoctorById = asyncHandler(async (req, res) => {
   res.status(200).json(doctor);
 });
 
+const ensureDoctorAccess = (req, res) => {
+  if (req.user.role !== 'doctor') {
+    res.status(403).json({ message: 'Only doctors can view patient history' });
+    return false;
+  }
+
+  if (!req.user.doctorProfileId) {
+    res.status(400).json({ message: 'Doctor account is not linked to a doctor profile' });
+    return false;
+  }
+
+  return true;
+};
+
+exports.getMyPatients = asyncHandler(async (req, res) => {
+  if (!ensureDoctorAccess(req, res)) return;
+
+  const appointments = await Appointment.find({ doctorId: req.user.doctorProfileId })
+    .sort({ appointmentDate: -1, appointmentTime: -1 })
+    .populate('userId', '-password')
+    .populate('serviceId', 'serviceName')
+    .lean();
+
+  const patientMap = new Map();
+
+  appointments.forEach((appointment) => {
+    const patient = appointment.userId;
+    if (!patient?._id) return;
+
+    const patientId = patient._id.toString();
+    const current = patientMap.get(patientId) || {
+      patient,
+      appointmentCount: 0,
+      lastAppointment: null,
+      lastServiceName: null,
+      hasMedicalNotes: false,
+    };
+
+    current.appointmentCount += 1;
+    current.hasMedicalNotes = current.hasMedicalNotes || Boolean(appointment.medicalNote?.text);
+
+    if (!current.lastAppointment) {
+      current.lastAppointment = appointment;
+      current.lastServiceName = appointment.serviceId?.serviceName || null;
+    }
+
+    patientMap.set(patientId, current);
+  });
+
+  res.status(200).json(Array.from(patientMap.values()));
+});
+
+exports.getPatientHistory = asyncHandler(async (req, res) => {
+  if (!ensureDoctorAccess(req, res)) return;
+  if (!validateObjectIdParam(res, req.params.patientId, 'patient ID')) return;
+
+  const appointments = await Appointment.find({
+    doctorId: req.user.doctorProfileId,
+    userId: req.params.patientId,
+  })
+    .sort({ appointmentDate: -1, appointmentTime: -1 })
+    .populate('doctorId')
+    .populate('serviceId')
+    .populate('userId', '-password')
+    .populate('medicalNote.addedBy', 'name role')
+    .lean();
+
+  if (appointments.length === 0) {
+    return res.status(403).json({ message: 'You are not authorized to view this patient history' });
+  }
+
+  const patient = appointments[0].userId;
+  const medicalNotes = appointments
+    .filter((appointment) => appointment.medicalNote?.text)
+    .map((appointment) => ({
+      appointmentId: appointment._id,
+      appointmentDate: appointment.appointmentDate,
+      appointmentTime: appointment.appointmentTime,
+      serviceName: appointment.serviceId?.serviceName || 'Service',
+      text: appointment.medicalNote.text,
+      addedBy: appointment.medicalNote.addedBy,
+      updatedAt: appointment.medicalNote.updatedAt,
+    }));
+
+  res.status(200).json({
+    patient,
+    appointmentCount: appointments.length,
+    medicalNoteCount: medicalNotes.length,
+    appointments,
+    medicalNotes,
+  });
+});
+
 exports.updateDoctor = asyncHandler(async (req, res) => {
   if (!validateObjectIdParam(res, req.params.id, 'doctor ID')) return;
 
