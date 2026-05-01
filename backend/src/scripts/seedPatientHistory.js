@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const connectDB = require('../config/db');
 const Appointment = require('../models/appointment.model');
 const Doctor = require('../models/doctor.model');
 const Service = require('../models/service.model');
@@ -44,9 +45,7 @@ const upsertAppointment = (appointment) =>
   );
 
 const seedPatientHistory = async () => {
-  if (!process.env.MONGO_URI) throw new Error('MONGO_URI is missing in backend/.env');
-
-  await mongoose.connect(process.env.MONGO_URI);
+  await connectDB();
 
   const doctor = await Doctor.findOneAndUpdate(
     { name: 'Dr. Amara Perera' },
