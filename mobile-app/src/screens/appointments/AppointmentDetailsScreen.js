@@ -28,6 +28,8 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
   const isDoctor = userInfo?.role === 'doctor';
   const sc = statusColor(appointment.status);
   const isPaid = appointment.paymentStatus === 'paid';
+  const servicePrice = appointment.serviceSnapshot?.price ?? appointment.serviceId?.price;
+  const serviceDuration = appointment.serviceSnapshot?.duration ?? appointment.serviceId?.duration;
 
   const loadAppointment = useCallback(async () => {
     if (!appointment?._id) return;
@@ -108,17 +110,17 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
           <View style={styles.divider} />
           <DetailRow label="Doctor" value={appointment.doctorId?.name || 'Unknown'} />
           <View style={styles.divider} />
-          <DetailRow label="Service" value={appointment.serviceId?.serviceName || 'Unknown service'} />
-          {appointment.serviceId?.price !== undefined ? (
+          <DetailRow label="Service" value={appointment.serviceSnapshot?.serviceName || appointment.serviceId?.serviceName || 'Unknown service'} />
+          {servicePrice !== undefined ? (
             <>
               <View style={styles.divider} />
-              <DetailRow label="Price" value={`LKR ${Number(appointment.serviceId.price).toLocaleString()}`} />
+              <DetailRow label="Price" value={`LKR ${Number(servicePrice).toLocaleString()}`} />
             </>
           ) : null}
-          {appointment.serviceId?.duration ? (
+          {serviceDuration ? (
             <>
               <View style={styles.divider} />
-              <DetailRow label="Duration" value={`${appointment.serviceId.duration} min`} />
+              <DetailRow label="Duration" value={`${serviceDuration} min`} />
             </>
           ) : null}
           <View style={styles.divider} />
@@ -224,7 +226,7 @@ const AppointmentDetailsScreen = ({ route, navigation }) => {
               onPress={() => navigation.navigate('PaymentForm', {
                 appointmentId: appointment._id,
                 appointment,
-                amount: appointment.serviceId?.price,
+                amount: servicePrice,
               })}
               style={styles.payBtn}
             />

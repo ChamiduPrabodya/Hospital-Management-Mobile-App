@@ -15,6 +15,23 @@ const getDayRangeUTC = (dateValue) => {
 
 const isValidTime = (t) => /^\d{2}:\d{2}$/.test(String(t));
 
+const isAppointmentInPast = (dateValue, timeValue) => {
+  const [hours, minutes] = String(timeValue).split(':').map(Number);
+  const appointmentDateTime = new Date(dateValue);
+  appointmentDateTime.setHours(hours, minutes, 0, 0);
+  return appointmentDateTime < new Date();
+};
+
+const getDoctorAvailableSlots = (doctor, dateValue) => {
+  if (doctor.availabilityMode === 'daily') {
+    return Array.isArray(doctor.dailyTimeSlots) ? doctor.dailyTimeSlots : [];
+  }
+
+  const schedule = Array.isArray(doctor.availabilitySchedule) ? doctor.availabilitySchedule : [];
+  const daySchedule = schedule.find((item) => item.date === String(dateValue).split('T')[0]);
+  return daySchedule?.timeSlots || [];
+};
+
 const isAssignedDoctor = (req, appointment) => (
   req.user.role === 'doctor'
   && req.user.doctorProfileId
@@ -24,6 +41,10 @@ const isAssignedDoctor = (req, appointment) => (
 
 exports.createAppointment = asyncHandler(async (req, res) => {
   const { doctorId, serviceId, appointmentDate, appointmentTime, notes } = req.body;
+
+  if (req.user.role !== 'patient') {
+    return res.status(403).json({ message: 'Only patients can create appointments' });
+  }
 
   if (!doctorId || !serviceId || !appointmentDate || !appointmentTime) {
     return res.status(400).json({ message: 'Doctor, service, date, and time are required' });
@@ -37,10 +58,19 @@ exports.createAppointment = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'appointmentTime must be in HH:MM format' });
   }
 
+  if (isAppointmentInPast(appointmentDate, appointmentTime)) {
+    return res.status(400).json({ message: 'Appointment date and time must be current or upcoming' });
+  }
+
   const doctor = await Doctor.findOne({ _id: doctorId, isActive: { $ne: false } });
   if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
   if (!doctor.availabilityStatus) {
     return res.status(400).json({ message: 'Selected doctor is not available' });
+  }
+
+  const availableSlots = getDoctorAvailableSlots(doctor, appointmentDate);
+  if (!availableSlots.includes(appointmentTime)) {
+    return res.status(400).json({ message: 'Selected doctor is not available at this date and time' });
   }
 
   const service = await Service.findOne({ _id: serviceId, isActive: { $ne: false } });
@@ -48,6 +78,24 @@ exports.createAppointment = asyncHandler(async (req, res) => {
   if (!service.availabilityStatus) {
     return res.status(400).json({ message: 'Selected service is not available' });
   }
+
+  const doctorServices = Array.isArray(doctor.services) ? doctor.services : [];
+  const offeredService = doctorServices.find((item) => {
+    const offeredServiceId = item.serviceId?._id || item.serviceId;
+    return offeredServiceId?.toString() === serviceId.toString();
+  });
+  if (!offeredService) {
+    return res.status(400).json({ message: 'Selected doctor does not provide this service' });
+  }
+  if (offeredService && offeredService.availabilityStatus === false) {
+    return res.status(400).json({ message: 'Selected doctor service is not available' });
+  }
+
+  const serviceSnapshot = {
+    serviceName: service.serviceName,
+    price: offeredService ? Number(offeredService.price) : Number(service.price),
+    duration: offeredService ? Number(offeredService.duration) : Number(service.duration),
+  };
 
   const { start, end } = getDayRangeUTC(appointmentDate);
   const existingAppointment = await Appointment.findOne({
@@ -65,6 +113,7 @@ exports.createAppointment = asyncHandler(async (req, res) => {
     userId: req.user._id,
     doctorId,
     serviceId,
+    serviceSnapshot,
     appointmentDate: new Date(appointmentDate),
     appointmentTime,
     notes,
@@ -89,6 +138,35 @@ exports.getAppointments = asyncHandler(async (req, res) => {
     .populate('userId', '-password')
     .populate('medicalNote.addedBy', 'name role');
   res.status(200).json(appointments);
+});
+
+exports.getDoctorBookedSlots = asyncHandler(async (req, res) => {
+  const { doctorId } = req.params;
+  const { date } = req.query;
+
+  if (!isValidObjectId(doctorId)) {
+    return res.status(400).json({ message: 'Invalid doctor ID' });
+  }
+
+  if (!date) {
+    return res.status(400).json({ message: 'Date is required' });
+  }
+
+  const doctor = await Doctor.findOne({ _id: doctorId, isActive: { $ne: false } });
+  if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+
+  const { start, end } = getDayRangeUTC(date);
+  const appointments = await Appointment.find({
+    doctorId,
+    appointmentDate: { $gte: start, $lte: end },
+    status: { $nin: ['cancelled', 'rejected'] },
+  });
+
+  const bookedSlots = appointments
+    .map((appointment) => appointment.appointmentTime)
+    .filter(Boolean);
+
+  res.status(200).json({ doctorId, date, bookedSlots });
 });
 
 exports.getAppointmentById = asyncHandler(async (req, res) => {
@@ -147,6 +225,12 @@ exports.updateAppointment = asyncHandler(async (req, res) => {
 
   const effectiveDoctorId = updates.doctorId || appointment.doctorId;
   const effectiveServiceId = updates.serviceId || appointment.serviceId;
+  const effectiveAppointmentDate = updates.appointmentDate || appointment.appointmentDate;
+  const effectiveAppointmentTime = updates.appointmentTime || appointment.appointmentTime;
+
+  if (isAppointmentInPast(effectiveAppointmentDate, effectiveAppointmentTime)) {
+    return res.status(400).json({ message: 'Appointment date and time must be current or upcoming' });
+  }
 
   const doctor = await Doctor.findOne({ _id: effectiveDoctorId, isActive: { $ne: false } });
   if (!doctor) return res.status(404).json({ message: 'Doctor not found' });

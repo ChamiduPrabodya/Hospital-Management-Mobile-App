@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
 const DoctorCard = ({ doctor, onPress }) => {
   const imageUri = doctor?.userId?.profileImage || doctor?.image;
-  const fee = doctor.consultationFee !== undefined && doctor.consultationFee !== null
-    ? `LKR ${Number(doctor.consultationFee).toLocaleString()}`
-    : 'N/A';
+  const serviceCount = Array.isArray(doctor?.services)
+    ? doctor.services.filter((item) => item.availabilityStatus !== false).length
+    : 0;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
@@ -23,7 +23,7 @@ const DoctorCard = ({ doctor, onPress }) => {
         <Text style={styles.name}>{doctor.name || 'Doctor name'}</Text>
         <Text style={styles.specialization}>{doctor.specialization || 'Specialist'}</Text>
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>Fee: {fee}</Text>
+          <Text style={styles.metaText}>{serviceCount} services</Text>
           <Text style={styles.metaText}>{doctor.experience ?? 0} yrs exp</Text>
         </View>
         <Text style={[styles.availability, { color: doctor.availabilityStatus ? '#16a34a' : '#dc2626' }]}> 
