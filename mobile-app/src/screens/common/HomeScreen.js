@@ -143,7 +143,7 @@ const HomeScreen = ({ navigation }) => {
         {isPatient ? (
           <TouchableOpacity
             style={styles.makeAppointmentBtn}
-            onPress={() => navigation.navigate('Appointments')}
+            onPress={() => handleQuickAccessPress('Appointments')}
             activeOpacity={0.86}
           >
             <Text style={styles.makeAppointmentText}>Make Appointment</Text>
