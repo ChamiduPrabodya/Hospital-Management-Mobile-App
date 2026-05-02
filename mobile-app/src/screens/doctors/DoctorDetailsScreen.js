@@ -24,6 +24,9 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
         )}
         <Text style={styles.name}>{doctor?.name || 'Doctor Name'}</Text>
         <Text style={styles.specialization}>{doctor?.specialization || 'Medical Specialist'}</Text>
+        <Text style={styles.department}>
+          {doctor?.departmentId?.name || 'Department not assigned'}
+        </Text>
         <View style={styles.infoRow}>
           <View style={styles.infoBlock}>
             <Text style={styles.infoLabel}>Experience</Text>
@@ -39,6 +42,15 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
             {doctor?.availabilityStatus ? 'Available now' : 'Not currently available'}
           </Text>
         </View>
+      </View>
+
+      <View style={styles.detailCard}>
+        <Text style={styles.detailTitle}>Department</Text>
+        <Text style={styles.description}>
+          {doctor?.departmentId?.name
+            ? `${doctor.departmentId.name}${doctor?.departmentId?.location ? ` - ${doctor.departmentId.location}` : ''}`
+            : 'No department linked yet.'}
+        </Text>
       </View>
 
       <View style={styles.detailCard}>
@@ -105,6 +117,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#475569',
     marginTop: 6,
+    textAlign: 'center',
+  },
+  department: {
+    fontSize: 13,
+    color: '#0d7f6f',
+    marginTop: 8,
+    fontWeight: '700',
     textAlign: 'center',
   },
   infoRow: {

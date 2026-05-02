@@ -28,6 +28,8 @@ const ADMIN_CARDS = [
   { key: 'DepartmentList', label: 'Departments', sub: 'Manage hospital wings', code: 'DPT' },
 ];
 
+const TAB_ROUTES = ['Home', 'Doctors', 'Patients', 'Appointments', 'Services', 'Payments', 'Complaints', 'Reports', 'Admin', 'Profile'];
+
 const roleContent = (role) => {
   if (role === 'doctor') {
     return {
@@ -126,8 +128,12 @@ const HomeScreen = ({ navigation }) => {
   const recentAppointments = doctorAppointments.slice(0, 3);
 
   const handleQuickAccessPress = (target) => {
-    // Route tab switches through the parent stack so shortcuts always land on the tab screen.
-    navigation.getParent()?.navigate('Tabs', { screen: target });
+    if (TAB_ROUTES.includes(target)) {
+      navigation.navigate(target);
+      return;
+    }
+
+    navigation.getParent()?.navigate(target);
   };
 
   return (

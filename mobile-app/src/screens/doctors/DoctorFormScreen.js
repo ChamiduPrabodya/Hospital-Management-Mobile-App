@@ -6,6 +6,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { createDoctorApi, getDoctorsApi, updateDoctorApi } from '../../api/doctorApi';
 import { createServiceApi, getServicesApi } from '../../api/serviceApi';
+import { getAllDepartments } from '../../api/departmentApi';
 import { uploadDoctorImageApi } from '../../api/uploadApi';
 import { validateEmail, validateStrongPassword } from '../../utils/validators';
 import CustomInput from '../../components/CustomInput';
@@ -30,6 +31,8 @@ const DoctorFormScreen = ({ route, navigation }) => {
   const [useOtherSpecialization, setUseOtherSpecialization] = useState(false);
   const [existingSpecializations, setExistingSpecializations] = useState([]);
   const [serviceOptions, setServiceOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  const [departmentId, setDepartmentId] = useState(doctor?.departmentId?._id || doctor?.departmentId || '');
   const [newServiceName, setNewServiceName] = useState('');
   const [newServiceDescription, setNewServiceDescription] = useState('');
   const [newServicePrice, setNewServicePrice] = useState('');
@@ -67,7 +70,11 @@ const DoctorFormScreen = ({ route, navigation }) => {
   useEffect(() => {
     (async () => {
       try {
-        const [doctorResponse, serviceResponse] = await Promise.all([getDoctorsApi(), getServicesApi()]);
+        const [doctorResponse, serviceResponse, departmentResponse] = await Promise.all([
+          getDoctorsApi(),
+          getServicesApi(),
+          getAllDepartments(),
+        ]);
         const doctorData = Array.isArray(doctorResponse.data) ? doctorResponse.data : doctorResponse.data?.data;
         const sections = Array.isArray(doctorData)
           ? doctorData
@@ -77,6 +84,8 @@ const DoctorFormScreen = ({ route, navigation }) => {
         setExistingSpecializations(Array.from(new Set(sections)).sort((a, b) => a.localeCompare(b)));
         const services = Array.isArray(serviceResponse.data) ? serviceResponse.data : serviceResponse.data?.data;
         setServiceOptions(Array.isArray(services) ? services.filter((item) => item.availabilityStatus !== false) : []);
+        const departments = Array.isArray(departmentResponse.data) ? departmentResponse.data : departmentResponse.data?.data;
+        setDepartmentOptions(Array.isArray(departments) ? departments : []);
       } catch (error) {
         console.log('Failed to load doctor form options:', error.response?.data?.message || error.message);
       }
@@ -221,7 +230,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
       ? formatManualSpecialization(manualSpecialization).trim()
       : specialization.trim();
 
-    if (!name || !finalSpecialization || experience === '') { Alert.alert('Error', 'Please fill required fields'); return; }
+    if (!name || !finalSpecialization || !departmentId || experience === '') { Alert.alert('Error', 'Please fill required fields including department'); return; }
     if (!doctor && (!email.trim() || !password.trim())) {
       Alert.alert('Error', 'Please add a unique email and password for the doctor login');
       return;
@@ -265,6 +274,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
       const data = {
         name,
         specialization: finalSpecialization,
+        departmentId,
         experience: exp,
         description,
         services: normalizedServices,
@@ -354,6 +364,31 @@ const DoctorFormScreen = ({ route, navigation }) => {
           ) : null}
           <CustomInput label="Experience (yrs)" value={experience} onChangeText={setExperience} placeholder="e.g. 5" keyboardType="numeric" />
           <CustomInput label="Description" value={description} onChangeText={setDescription} placeholder="Brief bio..." multiline numberOfLines={4} />
+        </View>
+
+        <Text style={styles.sectionLabel}>DEPARTMENT</Text>
+        <View style={styles.formCard}>
+          <Text style={styles.inputLabel}>Select Department</Text>
+          <View style={styles.sectionPicker}>
+            {departmentOptions.map((department) => {
+              const selected = departmentId === department._id;
+              return (
+                <TouchableOpacity
+                  key={department._id}
+                  style={[styles.sectionChip, selected && styles.sectionChipSelected]}
+                  onPress={() => setDepartmentId(department._id)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.sectionChipText, selected && styles.sectionChipTextSelected]}>
+                    {department.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {departmentOptions.length === 0 ? (
+            <Text style={styles.emptyText}>No departments available yet.</Text>
+          ) : null}
         </View>
 
         <Text style={styles.sectionLabel}>DOCTOR SERVICES</Text>

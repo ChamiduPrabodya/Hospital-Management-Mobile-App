@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const Doctor = require('../models/doctor.model');
 const Appointment = require('../models/appointment.model');
+const Department = require('../models/department.model');
 const User = require('../models/user.model');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -111,14 +112,15 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     email,
     password,
     services,
+    departmentId,
   } = req.body;
 
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const normalizedPassword = String(password || '').trim();
   const normalizedSpecialization = formatSpecialization(specialization);
 
-  if (!name || !normalizedSpecialization || experience === undefined || !normalizedEmail || !normalizedPassword) {
-    return res.status(400).json({ message: 'Name, specialization, experience, email, and password are required' });
+  if (!name || !normalizedSpecialization || experience === undefined || !normalizedEmail || !normalizedPassword || !departmentId) {
+    return res.status(400).json({ message: 'Name, specialization, department, experience, email, and password are required' });
   }
 
   if (!isValidEmail(normalizedEmail)) {
@@ -132,9 +134,18 @@ exports.createDoctor = asyncHandler(async (req, res) => {
   const doctorName = formatDoctorName(name);
   const doctorServices = normalizeDoctorServices(services);
 
+  if (!isValidObjectId(departmentId)) {
+    return res.status(400).json({ message: 'Department is invalid' });
+  }
+
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     return res.status(409).json({ message: 'Doctor email is already used by another account' });
+  }
+
+  const department = await Department.findById(departmentId);
+  if (!department) {
+    return res.status(404).json({ message: 'Selected department was not found' });
   }
 
   const serviceValidationError = validateDoctorServices(doctorServices);
@@ -148,6 +159,7 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     experience,
     description,
     image,
+    departmentId,
     services: doctorServices,
     availabilityStatus: availabilityStatus !== undefined ? availabilityStatus : true,
   });
@@ -173,6 +185,7 @@ exports.createDoctor = asyncHandler(async (req, res) => {
 exports.getDoctors = asyncHandler(async (req, res) => {
   const doctors = await Doctor.find({ isActive: { $ne: false } })
     .populate('userId', 'email role isActive profileImage')
+    .populate('departmentId', 'name location')
     .populate('services.serviceId');
   res.status(200).json(doctors);
 });
@@ -182,6 +195,7 @@ exports.getDoctorById = asyncHandler(async (req, res) => {
 
   const doctor = await Doctor.findOne({ _id: req.params.id, isActive: { $ne: false } })
     .populate('userId', 'email role isActive profileImage')
+    .populate('departmentId', 'name location description contactNumber')
     .populate('services.serviceId');
   if (!doctor) {
     return res.status(404).json({ message: 'Doctor not found' });
@@ -299,6 +313,16 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
   if (req.body.experience !== undefined) updates.experience = req.body.experience;
   if (req.body.description !== undefined) updates.description = req.body.description;
   if (req.body.image !== undefined) updates.image = req.body.image;
+  if (req.body.departmentId !== undefined) {
+    if (!isValidObjectId(req.body.departmentId)) {
+      return res.status(400).json({ message: 'Department is invalid' });
+    }
+    const department = await Department.findById(req.body.departmentId);
+    if (!department) {
+      return res.status(404).json({ message: 'Selected department was not found' });
+    }
+    updates.departmentId = req.body.departmentId;
+  }
   if (req.body.availabilityStatus !== undefined) updates.availabilityStatus = req.body.availabilityStatus;
   if (req.body.availabilityMode !== undefined || req.body.dailyTimeSlots !== undefined || req.body.availabilitySchedule !== undefined) {
     const normalizedAvailabilityMode = req.body.availabilityMode === 'daily' ? 'daily' : 'custom';
@@ -381,6 +405,7 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
 
   const populatedDoctor = await Doctor.findById(doctor._id)
     .populate('userId', 'email role isActive profileImage')
+    .populate('departmentId', 'name location description contactNumber')
     .populate('services.serviceId');
   res.status(200).json(populatedDoctor);
 });

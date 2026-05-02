@@ -18,6 +18,7 @@ const doctorSchema = new mongoose.Schema(
     imageAssetId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileAsset', default: null },
     description: { type: String },
     consultationFee: { type: Number },
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
     services: [
       {
         serviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Service', required: true },
