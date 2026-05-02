@@ -1,0 +1,9 @@
+# Local environment files
+.env
+**/.env
+.env.local
+**/.env.local
+
+# Keep shareable examples in git
+!.env.example
+!**/.env.example

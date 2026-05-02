@@ -295,15 +295,8 @@ describe('auth.controller loginUser', () => {
 
     await loginUser(req, res, jest.fn());
 
-<<<<<<< HEAD
     expect(User.findOne).toHaveBeenCalledWith({ email: 'patient@example.com' });
-=======
     expect(ensureDemoAuthData).toHaveBeenCalled();
-    expect(User.findOne).toHaveBeenCalledWith({
-      email: 'patient@example.com',
-      isActive: { $ne: false },
-    });
->>>>>>> 8ec15cbf1a805c262d50520bd7ec4d39f9327fac
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({
       message: 'Invalid credentials',
