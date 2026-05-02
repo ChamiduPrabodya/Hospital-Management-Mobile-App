@@ -86,6 +86,7 @@ const HomeScreen = ({ navigation }) => {
   const role = userInfo?.role || 'patient';
   const content = roleContent(role);
   const isDoctor = role === 'doctor';
+  const isPatient = role === 'patient';
   const doctorProfileId = userInfo?.doctorProfileId?._id || userInfo?.doctorProfileId;
 
   const loadDoctorAppointments = useCallback(async () => {
@@ -133,6 +134,15 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.crossWrap} pointerEvents="none">
           <View style={styles.crossV} /><View style={styles.crossH} />
         </View>
+        {isPatient ? (
+          <TouchableOpacity
+            style={styles.makeAppointmentBtn}
+            onPress={() => navigation.navigate('Appointments')}
+            activeOpacity={0.86}
+          >
+            <Text style={styles.makeAppointmentText}>Make Appointment</Text>
+          </TouchableOpacity>
+        ) : null}
         <Text style={styles.heroEst}>VICTORIA HOSPITAL</Text>
         <Text style={styles.heroGreet}>Good day,</Text>
         <Text style={styles.heroName}>{userInfo?.name || 'User'}</Text>
@@ -248,6 +258,25 @@ const styles = StyleSheet.create({
   crossWrap: { position: 'absolute', right: 20, bottom: 16, width: 70, height: 70, alignItems: 'center', justifyContent: 'center', opacity: 0.1 },
   crossV: { position: 'absolute', width: 16, height: 60, backgroundColor: COLORS.white, borderRadius: 3 },
   crossH: { position: 'absolute', width: 60, height: 16, backgroundColor: COLORS.white, borderRadius: 3 },
+  makeAppointmentBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 58 : 38,
+    right: 16,
+    minHeight: 36,
+    maxWidth: 150,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.tealStrong,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW.btn,
+  },
+  makeAppointmentText: {
+    fontSize: 11,
+    color: COLORS.white,
+    fontWeight: FONTS.bold,
+    textAlign: 'center',
+  },
 
   heroEst: { fontSize: 9, letterSpacing: 2.2, color: 'rgba(255,255,255,0.45)', marginBottom: 12 },
   heroGreet: { fontSize: 14, color: 'rgba(255,255,255,0.7)', fontWeight: FONTS.regular },
