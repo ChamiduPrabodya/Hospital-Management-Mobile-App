@@ -59,6 +59,12 @@ const DoctorFormScreen = ({ route, navigation }) => {
   );
   const [loading, setLoading] = useState(false);
 
+  const filteredServiceOptions = useMemo(() => (
+    departmentId
+      ? serviceOptions.filter((item) => (item.departmentId?._id || item.departmentId) === departmentId)
+      : serviceOptions
+  ), [departmentId, serviceOptions]);
+
   const sectionOptions = useMemo(() => {
     const values = [...existingSpecializations];
     if (doctor?.specialization && !values.includes(doctor.specialization)) {
@@ -152,6 +158,14 @@ const DoctorFormScreen = ({ route, navigation }) => {
     setManualSpecialization('');
   };
 
+  const selectDepartment = (nextDepartmentId) => {
+    setDepartmentId(nextDepartmentId);
+    setDoctorServices((prev) => prev.filter((item) => {
+      const linkedService = serviceOptions.find((service) => service._id === item.serviceId);
+      return linkedService && (linkedService.departmentId?._id || linkedService.departmentId) === nextDepartmentId;
+    }));
+  };
+
   const isDoctorServiceSelected = (serviceId) => doctorServices.some((item) => item.serviceId === serviceId);
 
   const toggleDoctorService = (service) => {
@@ -187,6 +201,11 @@ const DoctorFormScreen = ({ route, navigation }) => {
       return;
     }
 
+    if (!departmentId) {
+      Alert.alert('Error', 'Please select a department before creating a new service');
+      return;
+    }
+
     if (Number.isNaN(price) || price <= 0 || !Number.isInteger(duration) || duration <= 0) {
       Alert.alert('Error', 'Please enter a valid service price and duration');
       return;
@@ -195,6 +214,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
     setAddingService(true);
     try {
       const response = await createServiceApi({
+        departmentId,
         serviceName: newServiceName.trim(),
         description: newServiceDescription.trim(),
         price,
@@ -273,8 +293,8 @@ const DoctorFormScreen = ({ route, navigation }) => {
       const normalizedEmail = email.trim().toLowerCase();
       const data = {
         name,
-        specialization: finalSpecialization,
         departmentId,
+        specialization: finalSpecialization,
         experience: exp,
         description,
         services: normalizedServices,
@@ -376,7 +396,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
                 <TouchableOpacity
                   key={department._id}
                   style={[styles.sectionChip, selected && styles.sectionChipSelected]}
-                  onPress={() => setDepartmentId(department._id)}
+                  onPress={() => selectDepartment(department._id)}
                   activeOpacity={0.85}
                 >
                   <Text style={[styles.sectionChipText, selected && styles.sectionChipTextSelected]}>
@@ -433,10 +453,14 @@ const DoctorFormScreen = ({ route, navigation }) => {
             />
           </View>
 
-          {serviceOptions.length === 0 ? (
-            <Text style={styles.emptyText}>Create hospital services first, then assign them to doctors here.</Text>
+          {filteredServiceOptions.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {departmentId
+                ? 'No services are available for this department yet. Add one above to continue.'
+                : 'Choose a department first, then assign services here.'}
+            </Text>
           ) : (
-            serviceOptions.map((service) => {
+            filteredServiceOptions.map((service) => {
               const selected = isDoctorServiceSelected(service._id);
               const selectedService = doctorServices.find((item) => item.serviceId === service._id);
               return (

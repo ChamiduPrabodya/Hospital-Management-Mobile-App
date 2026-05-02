@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const Doctor = require('../models/doctor.model');
 const Appointment = require('../models/appointment.model');
 const Department = require('../models/department.model');
+const Service = require('../models/service.model');
 const User = require('../models/user.model');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -58,6 +59,28 @@ const validateDoctorServices = (services) => {
   return null;
 };
 
+const validateDoctorServicesForDepartment = async (services, departmentId) => {
+  const serviceIds = Array.from(new Set(services.map((service) => String(service.serviceId))));
+  const existingServices = await Service.find({
+    _id: { $in: serviceIds },
+    isActive: { $ne: false },
+  }).select('_id departmentId');
+
+  if (existingServices.length !== serviceIds.length) {
+    return 'One or more selected services do not exist';
+  }
+
+  const invalidService = existingServices.find((service) => (
+    service.departmentId?.toString() !== String(departmentId)
+  ));
+
+  if (invalidService) {
+    return 'Selected services must belong to the same department as the doctor';
+  }
+
+  return null;
+};
+
 const normalizeTimeSlots = (timeSlots = []) => (
   Array.isArray(timeSlots)
     ? Array.from(new Set(timeSlots.map((slot) => String(slot || '').trim()).filter(Boolean))).sort()
@@ -109,10 +132,10 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     description,
     image,
     availabilityStatus,
+    departmentId,
     email,
     password,
     services,
-    departmentId,
   } = req.body;
 
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -127,6 +150,15 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Doctor email must be valid' });
   }
 
+  if (!isValidObjectId(departmentId)) {
+    return res.status(400).json({ message: 'Invalid department ID' });
+  }
+
+  const department = await Department.findById(departmentId);
+  if (!department) {
+    return res.status(404).json({ message: 'Department not found' });
+  }
+
   if (!isStrongPassword(normalizedPassword)) {
     return res.status(400).json({ message: 'Doctor password must use 8+ characters with uppercase, lowercase, number, and symbol' });
   }
@@ -134,18 +166,9 @@ exports.createDoctor = asyncHandler(async (req, res) => {
   const doctorName = formatDoctorName(name);
   const doctorServices = normalizeDoctorServices(services);
 
-  if (!isValidObjectId(departmentId)) {
-    return res.status(400).json({ message: 'Department is invalid' });
-  }
-
   const existingUser = await User.findOne({ email: normalizedEmail });
   if (existingUser) {
     return res.status(409).json({ message: 'Doctor email is already used by another account' });
-  }
-
-  const department = await Department.findById(departmentId);
-  if (!department) {
-    return res.status(404).json({ message: 'Selected department was not found' });
   }
 
   const serviceValidationError = validateDoctorServices(doctorServices);
@@ -153,13 +176,21 @@ exports.createDoctor = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: serviceValidationError });
   }
 
+  const departmentServiceValidationError = await validateDoctorServicesForDepartment(
+    doctorServices,
+    departmentId
+  );
+  if (departmentServiceValidationError) {
+    return res.status(400).json({ message: departmentServiceValidationError });
+  }
+
   const doctor = await Doctor.create({
     name: doctorName,
     specialization: normalizedSpecialization,
+    departmentId,
     experience,
     description,
     image,
-    departmentId,
     services: doctorServices,
     availabilityStatus: availabilityStatus !== undefined ? availabilityStatus : true,
   });
@@ -184,8 +215,8 @@ exports.createDoctor = asyncHandler(async (req, res) => {
 
 exports.getDoctors = asyncHandler(async (req, res) => {
   const doctors = await Doctor.find({ isActive: { $ne: false } })
-    .populate('userId', 'email role isActive profileImage')
     .populate('departmentId', 'name location')
+    .populate('userId', 'email role isActive profileImage')
     .populate('services.serviceId');
   res.status(200).json(doctors);
 });
@@ -310,19 +341,21 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
     updates.specialization = formatSpecialization(req.body.specialization);
     if (!updates.specialization) return res.status(400).json({ message: 'Specialization is required' });
   }
+  if (req.body.departmentId !== undefined) {
+    if (!isValidObjectId(req.body.departmentId)) {
+      return res.status(400).json({ message: 'Invalid department ID' });
+    }
+
+    const department = await Department.findById(req.body.departmentId);
+    if (!department) {
+      return res.status(404).json({ message: 'Department not found' });
+    }
+
+    updates.departmentId = req.body.departmentId;
+  }
   if (req.body.experience !== undefined) updates.experience = req.body.experience;
   if (req.body.description !== undefined) updates.description = req.body.description;
   if (req.body.image !== undefined) updates.image = req.body.image;
-  if (req.body.departmentId !== undefined) {
-    if (!isValidObjectId(req.body.departmentId)) {
-      return res.status(400).json({ message: 'Department is invalid' });
-    }
-    const department = await Department.findById(req.body.departmentId);
-    if (!department) {
-      return res.status(404).json({ message: 'Selected department was not found' });
-    }
-    updates.departmentId = req.body.departmentId;
-  }
   if (req.body.availabilityStatus !== undefined) updates.availabilityStatus = req.body.availabilityStatus;
   if (req.body.availabilityMode !== undefined || req.body.dailyTimeSlots !== undefined || req.body.availabilitySchedule !== undefined) {
     const normalizedAvailabilityMode = req.body.availabilityMode === 'daily' ? 'daily' : 'custom';
@@ -342,7 +375,27 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
     const doctorServices = normalizeDoctorServices(req.body.services);
     const serviceValidationError = validateDoctorServices(doctorServices);
     if (serviceValidationError) return res.status(400).json({ message: serviceValidationError });
+
+    const effectiveDepartmentId = updates.departmentId || doctor.departmentId;
+    const departmentServiceValidationError = await validateDoctorServicesForDepartment(
+      doctorServices,
+      effectiveDepartmentId
+    );
+    if (departmentServiceValidationError) {
+      return res.status(400).json({ message: departmentServiceValidationError });
+    }
+
     updates.services = doctorServices;
+  }
+  if (req.body.departmentId !== undefined && req.body.services === undefined) {
+    const currentDoctorServices = normalizeDoctorServices(doctor.services);
+    const departmentServiceValidationError = await validateDoctorServicesForDepartment(
+      currentDoctorServices,
+      updates.departmentId
+    );
+    if (departmentServiceValidationError) {
+      return res.status(400).json({ message: departmentServiceValidationError });
+    }
   }
 
   Object.assign(doctor, updates);

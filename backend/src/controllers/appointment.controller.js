@@ -15,6 +15,15 @@ const getDayRangeUTC = (dateValue) => {
 
 const isValidTime = (t) => /^\d{2}:\d{2}$/.test(String(t));
 
+const toScheduleDateKey = (dateValue) => {
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return String(dateValue).split('T')[0];
+  }
+
+  return parsedDate.toISOString().split('T')[0];
+};
+
 const isAppointmentInPast = (dateValue, timeValue) => {
   const [hours, minutes] = String(timeValue).split(':').map(Number);
   const appointmentDateTime = new Date(dateValue);
@@ -28,7 +37,7 @@ const getDoctorAvailableSlots = (doctor, dateValue) => {
   }
 
   const schedule = Array.isArray(doctor.availabilitySchedule) ? doctor.availabilitySchedule : [];
-  const daySchedule = schedule.find((item) => item.date === String(dateValue).split('T')[0]);
+  const daySchedule = schedule.find((item) => item.date === toScheduleDateKey(dateValue));
   return daySchedule?.timeSlots || [];
 };
 
@@ -38,6 +47,12 @@ const isAssignedDoctor = (req, appointment) => (
   && appointment.doctorId
   && (appointment.doctorId._id || appointment.doctorId).toString() === req.user.doctorProfileId.toString()
 );
+
+const buildServiceSnapshot = (service, offeredService) => ({
+  serviceName: service.serviceName,
+  price: offeredService ? Number(offeredService.price) : Number(service.price),
+  duration: offeredService ? Number(offeredService.duration) : Number(service.duration),
+});
 
 exports.createAppointment = asyncHandler(async (req, res) => {
   const { doctorId, serviceId, appointmentDate, appointmentTime, notes } = req.body;
@@ -91,11 +106,7 @@ exports.createAppointment = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Selected doctor service is not available' });
   }
 
-  const serviceSnapshot = {
-    serviceName: service.serviceName,
-    price: offeredService ? Number(offeredService.price) : Number(service.price),
-    duration: offeredService ? Number(offeredService.duration) : Number(service.duration),
-  };
+  const serviceSnapshot = buildServiceSnapshot(service, offeredService);
 
   const { start, end } = getDayRangeUTC(appointmentDate);
   const existingAppointment = await Appointment.findOne({
@@ -244,6 +255,25 @@ exports.updateAppointment = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Selected service is not available' });
   }
 
+  const availableSlots = getDoctorAvailableSlots(doctor, effectiveAppointmentDate);
+  if (!availableSlots.includes(effectiveAppointmentTime)) {
+    return res.status(400).json({ message: 'Selected doctor is not available at this date and time' });
+  }
+
+  const doctorServices = Array.isArray(doctor.services) ? doctor.services : [];
+  const offeredService = doctorServices.find((item) => {
+    const offeredServiceId = item.serviceId?._id || item.serviceId;
+    return offeredServiceId?.toString() === effectiveServiceId.toString();
+  });
+
+  if (!offeredService) {
+    return res.status(400).json({ message: 'Selected doctor does not provide this service' });
+  }
+
+  if (offeredService.availabilityStatus === false) {
+    return res.status(400).json({ message: 'Selected doctor service is not available' });
+  }
+
   const doctorChanged = updates.doctorId !== undefined;
   const dateChanged = updates.appointmentDate !== undefined;
   const timeChanged = updates.appointmentTime !== undefined;
@@ -268,6 +298,14 @@ exports.updateAppointment = asyncHandler(async (req, res) => {
   Object.assign(appointment, updates);
   if (updates.appointmentDate !== undefined) {
     appointment.appointmentDate = new Date(updates.appointmentDate);
+  }
+  if (
+    updates.doctorId !== undefined
+    || updates.serviceId !== undefined
+    || updates.appointmentDate !== undefined
+    || updates.appointmentTime !== undefined
+  ) {
+    appointment.serviceSnapshot = buildServiceSnapshot(service, offeredService);
   }
   await appointment.save();
 

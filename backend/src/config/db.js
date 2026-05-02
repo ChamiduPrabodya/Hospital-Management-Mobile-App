@@ -43,7 +43,27 @@ const connectWithRetry = async (
   return false;
 };
 
-const getConnectionMode = () => (getTrimmedEnv('MONGO_URI_SOURCE') || getTrimmedEnv('MONGO_TARGET') || 'auto').toLowerCase();
+const normalizeConnectionMode = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (!normalized) {
+    return 'auto';
+  }
+
+  if (normalized === 'atles') {
+    console.warn('MONGO_URI_SOURCE=atles is a typo. Using atlas mode instead.');
+    return 'atlas';
+  }
+
+  if (['auto', 'local', 'atlas'].includes(normalized)) {
+    return normalized;
+  }
+
+  console.warn(`Unknown MongoDB connection mode "${normalized}". Falling back to auto.`);
+  return 'auto';
+};
+
+const getConnectionMode = () => normalizeConnectionMode(getTrimmedEnv('MONGO_URI_SOURCE') || getTrimmedEnv('MONGO_TARGET') || 'auto');
 
 const getMongoUris = (mode = getConnectionMode()) => {
   const genericUri = getTrimmedEnv('MONGO_URI');
@@ -111,3 +131,4 @@ const connectDB = async () => {
 module.exports = connectDB;
 module.exports.getConnectionMode = getConnectionMode;
 module.exports.getMongoUris = getMongoUris;
+module.exports.normalizeConnectionMode = normalizeConnectionMode;
