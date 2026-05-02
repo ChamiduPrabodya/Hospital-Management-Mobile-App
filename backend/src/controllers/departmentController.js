@@ -1,4 +1,6 @@
 const Department = require('../models/department.model');
+const Doctor = require('../models/doctor.model');
+const Service = require('../models/service.model');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
 const { validateObjectIdParam } = require('../utils/validateObjectId');
@@ -78,6 +80,17 @@ exports.deleteDepartment = asyncHandler(async (req, res) => {
   const department = await Department.findById(req.params.id);
   if (!department) {
     return res.status(404).json({ message: 'Department not found' });
+  }
+
+  const [linkedDoctors, linkedServices] = await Promise.all([
+    Doctor.countDocuments({ departmentId: department._id, isActive: { $ne: false } }),
+    Service.countDocuments({ departmentId: department._id, isActive: { $ne: false } }),
+  ]);
+
+  if (linkedDoctors > 0 || linkedServices > 0) {
+    return res.status(409).json({
+      message: 'Department is linked to active doctors or services and cannot be deleted',
+    });
   }
 
   await department.deleteOne();

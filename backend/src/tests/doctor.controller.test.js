@@ -6,6 +6,14 @@ jest.mock('../models/doctor.model', () => ({
   create: jest.fn(),
 }));
 
+jest.mock('../models/department.model', () => ({
+  findById: jest.fn(),
+}));
+
+jest.mock('../models/service.model', () => ({
+  find: jest.fn(),
+}));
+
 jest.mock('../models/user.model', () => ({
   findOne: jest.fn(),
   create: jest.fn(),
@@ -17,10 +25,13 @@ jest.mock('../models/appointment.model', () => ({
 
 const bcrypt = require('bcryptjs');
 const Doctor = require('../models/doctor.model');
+const Department = require('../models/department.model');
+const Service = require('../models/service.model');
 const User = require('../models/user.model');
 const { createDoctor } = require('../controllers/doctor.controller');
 
 const ids = {
+  department: '507f1f77bcf86cd799439010',
   service: '507f1f77bcf86cd799439012',
 };
 
@@ -34,6 +45,10 @@ const createRes = () => {
 describe('doctor.controller createDoctor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Department.findById.mockResolvedValue({ _id: ids.department, name: 'Cardiology' });
+    Service.find.mockReturnValue({
+      select: jest.fn().mockResolvedValue([{ _id: ids.service, departmentId: ids.department }]),
+    });
   });
 
   it('requires login email and password when creating a doctor', async () => {
@@ -42,6 +57,7 @@ describe('doctor.controller createDoctor', () => {
         name: 'Dr Test',
         specialization: 'Cardiology',
         experience: 5,
+        departmentId: ids.department,
       },
     };
     const res = createRes();
@@ -51,7 +67,7 @@ describe('doctor.controller createDoctor', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
-      message: 'Name, specialization, experience, email, and password are required',
+      message: 'Name, specialization, department, experience, email, and password are required',
     });
     expect(Doctor.create).not.toHaveBeenCalled();
   });
@@ -64,6 +80,7 @@ describe('doctor.controller createDoctor', () => {
         name: 'Dr Test',
         specialization: 'Cardiology',
         experience: 5,
+        departmentId: ids.department,
         email: 'doctor@example.com',
         password: 'Doctor123!',
       },
@@ -86,6 +103,7 @@ describe('doctor.controller createDoctor', () => {
         name: 'Dr Test',
         specialization: 'Cardiology',
         experience: 5,
+        departmentId: ids.department,
         email: 'not-an-email',
         password: 'doctor123',
       },
@@ -108,6 +126,7 @@ describe('doctor.controller createDoctor', () => {
         name: 'Dr Test',
         specialization: 'Cardiology',
         experience: 5,
+        departmentId: ids.department,
         email: 'doctor@example.com',
         password: 'doctor123',
       },
@@ -138,6 +157,7 @@ describe('doctor.controller createDoctor', () => {
         name: 'Dr Test',
         specialization: 'Cardiology',
         experience: 5,
+        departmentId: ids.department,
         email: 'Doctor@Example.com ',
         password: 'Doctor123!',
         services: [{ serviceId: ids.service, price: 2500, duration: 30 }],
@@ -177,6 +197,7 @@ describe('doctor.controller createDoctor', () => {
         name: 'Dr Test',
         specialization: 'neurology',
         experience: 5,
+        departmentId: ids.department,
         email: 'doctor@example.com',
         password: 'Doctor123!',
         services: [{ serviceId: ids.service, price: 2500, duration: 30 }],
@@ -208,6 +229,7 @@ describe('doctor.controller createDoctor', () => {
         name: 'Dr Test',
         specialization: 'Cardiology',
         experience: 5,
+        departmentId: ids.department,
         email: 'doctor@example.com',
         password: 'Doctor123!',
         services: [{ serviceId: ids.service, price: '3500', duration: '45' }],

@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const connectDB = require('../config/db');
 const Appointment = require('../models/appointment.model');
 const Doctor = require('../models/doctor.model');
+const Department = require('../models/department.model');
 const Service = require('../models/service.model');
 const User = require('../models/user.model');
 
@@ -32,6 +33,13 @@ const upsertService = (service) =>
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
 
+const upsertDepartment = (department) =>
+  Department.findOneAndUpdate(
+    { name: department.name },
+    { $set: department },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+  );
+
 const upsertAppointment = (appointment) =>
   Appointment.findOneAndUpdate(
     {
@@ -47,12 +55,28 @@ const upsertAppointment = (appointment) =>
 const seedPatientHistory = async () => {
   await connectDB();
 
+  const [cardiologyDepartment, generalDepartment] = await Promise.all([
+    upsertDepartment({
+      name: 'Cardiology',
+      description: 'Heart and cardiovascular care.',
+      location: 'Block A, Level 2',
+      contactNumber: '0112345678',
+    }),
+    upsertDepartment({
+      name: 'General Medicine',
+      description: 'Primary care consultations and general health support.',
+      location: 'Block A, Level 1',
+      contactNumber: '0112345670',
+    }),
+  ]);
+
   const doctor = await Doctor.findOneAndUpdate(
     { name: 'Dr. Amara Perera' },
     {
       $set: {
         name: 'Dr. Amara Perera',
         specialization: 'Cardiology',
+        departmentId: cardiologyDepartment._id,
         experience: 12,
         description: 'Senior cardiologist specializing in preventive heart care.',
         consultationFee: 3500,
@@ -79,6 +103,7 @@ const seedPatientHistory = async () => {
 
   const [cardiology, general] = await Promise.all([
     upsertService({
+      departmentId: cardiologyDepartment._id,
       serviceName: 'Cardiology Checkup',
       description: 'Heart health review with specialist consultation.',
       price: 4500,
@@ -86,6 +111,7 @@ const seedPatientHistory = async () => {
       availabilityStatus: true,
     }),
     upsertService({
+      departmentId: generalDepartment._id,
       serviceName: 'General Consultation',
       description: 'Basic doctor consultation and medical advice.',
       price: 1500,
@@ -93,6 +119,22 @@ const seedPatientHistory = async () => {
       availabilityStatus: true,
     }),
   ]);
+
+  doctor.services = [
+    {
+      serviceId: cardiology._id,
+      price: cardiology.price,
+      duration: cardiology.duration,
+      availabilityStatus: true,
+    },
+    {
+      serviceId: general._id,
+      price: general.price,
+      duration: general.duration,
+      availabilityStatus: true,
+    },
+  ];
+  await doctor.save();
 
   const [patientOne, patientTwo] = await Promise.all([
     upsertUser({
