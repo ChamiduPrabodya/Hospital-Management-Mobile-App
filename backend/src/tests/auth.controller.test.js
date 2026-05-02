@@ -20,11 +20,13 @@ jest.mock('../models/user.model', () => ({
 }));
 
 jest.mock('../utils/generateToken', () => jest.fn(() => 'token'));
+jest.mock('../bootstrap/ensureDemoAuthData', () => jest.fn().mockResolvedValue(undefined));
 
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/user.model');
 const generateToken = require('../utils/generateToken');
+const ensureDemoAuthData = require('../bootstrap/ensureDemoAuthData');
 const {
   registerUser,
   loginUser,
@@ -176,6 +178,8 @@ describe('auth.controller registerUser', () => {
 describe('auth.controller loginUser', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.ADMIN_EMAIL = 'admin@example.com';
+    process.env.DOCTOR_EMAIL = 'doctor@example.com';
   });
 
   it('requires email and password', async () => {
@@ -223,6 +227,7 @@ describe('auth.controller loginUser', () => {
 
     await loginUser(req, res, jest.fn());
 
+    expect(ensureDemoAuthData).toHaveBeenCalled();
     expect(User.findOne).toHaveBeenCalledWith({
       email: 'patient@example.com',
       isActive: { $ne: false },
@@ -249,6 +254,52 @@ describe('auth.controller loginUser', () => {
     expect(res.json).toHaveBeenCalledWith({
       message: 'Invalid credentials',
     });
+  });
+
+  it('does not try to bootstrap demo data for unknown emails', async () => {
+    User.findOne.mockResolvedValue(null);
+    const req = { body: { email: 'someone@example.org', password: 'secret123' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(ensureDemoAuthData).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Invalid credentials',
+    });
+  });
+
+  it('repairs a demo user when the stored password is stale', async () => {
+    User.findOne
+      .mockResolvedValueOnce({
+        _id: 'user-id',
+        password: 'old-hash',
+      })
+      .mockResolvedValueOnce({
+        _id: 'user-id',
+        name: 'System Admin',
+        email: 'admin@example.com',
+        password: 'new-hash',
+        role: 'admin',
+        doctorProfileId: null,
+        phone: '0771234567',
+        address: 'Colombo',
+        profileImage: null,
+      });
+    bcrypt.compare
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    const req = { body: { email: 'admin@example.com', password: 'admin123' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(ensureDemoAuthData).toHaveBeenCalled();
+    expect(bcrypt.compare).toHaveBeenNthCalledWith(1, 'admin123', 'old-hash');
+    expect(bcrypt.compare).toHaveBeenNthCalledWith(2, 'admin123', 'new-hash');
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 
   it('logs in with trimmed and normalized credentials', async () => {
