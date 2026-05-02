@@ -1,26 +1,32 @@
 const mongoose = require('mongoose');
 
-// Define the schema for the Department entity
 const departmentSchema = new mongoose.Schema({
-    name: { 
-        type: String, 
-        required: [true, 'Department name is required'],
-        trim: true 
-    },
-    description: { 
-        type: String, 
-        required: [true, 'Description is required'] 
-    },
-    location: { 
-        type: String, 
-        required: [true, 'Location (Floor/Room) is required'] 
-    },
-    contactNumber: { 
-        type: String 
-    }
-}, { 
-    // Automatically manage createdAt and updatedAt fields
-    timestamps: true 
+  name: {
+    type: String,
+    required: [true, 'Department name is required'],
+    trim: true,
+    maxlength: [80, 'Department name cannot exceed 80 characters'],
+  },
+  description: {
+    type: String,
+    required: [true, 'Description is required'],
+    trim: true,
+    maxlength: [500, 'Description cannot exceed 500 characters'],
+  },
+  location: {
+    type: String,
+    required: [true, 'Location is required'],
+    trim: true,
+    maxlength: [120, 'Location cannot exceed 120 characters'],
+  },
+  contactNumber: {
+    type: String,
+    trim: true,
+    default: '',
+    maxlength: [30, 'Contact number cannot exceed 30 characters'],
+  },
+}, {
+  timestamps: true,
 });
 
 module.exports = mongoose.model('Department', departmentSchema);

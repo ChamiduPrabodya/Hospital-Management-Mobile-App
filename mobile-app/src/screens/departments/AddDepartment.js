@@ -1,110 +1,213 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
-} from 'react-native';
-import { createDepartmentApi } from '../../api/departmentApi';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Alert, ScrollView } from 'react-native';
+import { createDepartmentApi, updateDepartmentApi } from '../../api/departmentApi';
+import CustomInput from '../../components/CustomInput';
+import CustomButton from '../../components/CustomButton';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import ScreenHeader from '../../components/ScreenHeader';
+import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
-const AddDepartment = ({ navigation }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
-  const [contactNumber, setContactNumber] = useState('');
+const sanitizePhoneInput = (value) => String(value || '').replace(/[^\d+\-() ]/g, '');
+
+const AddDepartment = ({ route, navigation }) => {
+  const { department } = route.params || {};
+  const isEditing = Boolean(department?._id);
+
+  const [name, setName] = useState(department?.name || '');
+  const [description, setDescription] = useState(department?.description || '');
+  const [location, setLocation] = useState(department?.location || '');
+  const [contactNumber, setContactNumber] = useState(department?.contactNumber || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const formSubtitle = useMemo(
+    () => (isEditing ? 'Update an existing hospital wing' : 'Create a new hospital wing'),
+    [isEditing]
+  );
+
+  const validate = () => {
+    const nextErrors = {};
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
+    const trimmedLocation = location.trim();
+    const trimmedContactNumber = contactNumber.trim();
+
+    if (!trimmedName) {
+      nextErrors.name = 'Department name is required.';
+    } else if (trimmedName.length < 3) {
+      nextErrors.name = 'Use at least 3 characters.';
+    }
+
+    if (!trimmedDescription) {
+      nextErrors.description = 'Description is required.';
+    } else if (trimmedDescription.length < 10) {
+      nextErrors.description = 'Add a little more detail for the department.';
+    }
+
+    if (!trimmedLocation) {
+      nextErrors.location = 'Location is required.';
+    }
+
+    if (trimmedContactNumber && trimmedContactNumber.replace(/\D/g, '').length < 7) {
+      nextErrors.contactNumber = 'Enter a valid contact number.';
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleSave = async () => {
-    if (!name || !description || !location) {
-      Alert.alert('Error', 'Please fill in all required fields.');
+    if (!validate()) {
+      Alert.alert('Check Details', 'Please correct the highlighted department fields.');
       return;
     }
 
     setIsSaving(true);
 
+    const payload = {
+      name: name.trim(),
+      description: description.trim(),
+      location: location.trim(),
+      contactNumber: contactNumber.trim(),
+    };
+
     try {
-      await createDepartmentApi({ name, description, location, contactNumber });
-      Alert.alert('Success', 'Department added successfully!');
+      if (isEditing) {
+        await updateDepartmentApi(department._id, payload);
+      } else {
+        await createDepartmentApi(payload);
+      }
+
+      Alert.alert('Success', isEditing ? 'Department updated successfully.' : 'Department added successfully.');
       navigation.goBack();
     } catch (error) {
-      console.error(error);
       Alert.alert(
-        'Error',
-        error?.response?.data?.message || 'Failed to add department. Please try again.'
+        'Save Failed',
+        error?.response?.data?.message || 'Failed to save department. Please try again.'
       );
     } finally {
       setIsSaving(false);
     }
   };
 
+  if (isSaving) {
+    return <LoadingSpinner message={isEditing ? 'Updating department...' : 'Creating department...'} />;
+  }
+
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.label}>Department Name *</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="e.g., Cardiology"
+    <View style={styles.root}>
+      <ScreenHeader
+        title={isEditing ? 'Edit Department' : 'Add Department'}
+        subtitle={formSubtitle}
+        onBack={() => navigation.goBack()}
       />
 
-      <Text style={styles.label}>Description *</Text>
-      <TextInput
-        style={[styles.input, styles.textArea]}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Brief description of the department"
-        multiline
-        numberOfLines={4}
-      />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>DEPARTMENT INFORMATION</Text>
+        <View style={styles.formCard}>
+          <CustomInput
+            label="Department Name"
+            value={name}
+            onChangeText={(value) => {
+              setName(value);
+              if (errors.name) setErrors((current) => ({ ...current, name: undefined }));
+            }}
+            placeholder="e.g. Cardiology"
+            autoCapitalize="words"
+            errorMessage={errors.name}
+          />
+          <CustomInput
+            label="Description"
+            value={description}
+            onChangeText={(value) => {
+              setDescription(value);
+              if (errors.description) setErrors((current) => ({ ...current, description: undefined }));
+            }}
+            placeholder="Describe the services and care this department provides..."
+            multiline
+            numberOfLines={5}
+            autoCapitalize="sentences"
+            errorMessage={errors.description}
+          />
+          <CustomInput
+            label="Location"
+            value={location}
+            onChangeText={(value) => {
+              setLocation(value);
+              if (errors.location) setErrors((current) => ({ ...current, location: undefined }));
+            }}
+            placeholder="e.g. Block B, Level 2"
+            autoCapitalize="words"
+            errorMessage={errors.location}
+          />
+          <CustomInput
+            label="Contact Number"
+            value={contactNumber}
+            onChangeText={(value) => {
+              setContactNumber(sanitizePhoneInput(value));
+              if (errors.contactNumber) setErrors((current) => ({ ...current, contactNumber: undefined }));
+            }}
+            placeholder="e.g. 011 234 5678"
+            keyboardType="phone-pad"
+            errorMessage={errors.contactNumber}
+          />
+        </View>
 
-      <Text style={styles.label}>Location *</Text>
-      <TextInput
-        style={styles.input}
-        value={location}
-        onChangeText={setLocation}
-        placeholder="e.g., Floor 2, Room 204"
-      />
+        <View style={styles.tipCard}>
+          <Text style={styles.tipTitle}>Department Setup Note</Text>
+          <Text style={styles.tipText}>
+            Keep names short and recognizable so admins can quickly find the correct hospital wing from the dashboard.
+          </Text>
+        </View>
 
-      <Text style={styles.label}>Contact Number</Text>
-      <TextInput
-        style={styles.input}
-        value={contactNumber}
-        onChangeText={setContactNumber}
-        placeholder="e.g., 0112345678"
-        keyboardType="phone-pad"
-      />
-
-      <TouchableOpacity style={styles.button} onPress={handleSave} disabled={isSaving}>
-        <Text style={styles.buttonText}>{isSaving ? 'Saving...' : 'Save Department'}</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <CustomButton
+          title={isEditing ? 'Update Department' : 'Save Department'}
+          onPress={handleSave}
+        />
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  label: { fontSize: 16, fontWeight: 'bold', marginTop: 15, color: '#333' },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 5,
-    fontSize: 16,
+  root: { flex: 1, backgroundColor: COLORS.bgPage },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16, paddingTop: 20, paddingBottom: 40 },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: FONTS.bold,
+    color: COLORS.tealBright,
+    letterSpacing: 2,
+    marginBottom: 10,
+    marginLeft: 4,
   },
-  textArea: { height: 100, textAlignVertical: 'top' },
-  button: {
-    backgroundColor: '#007bff',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 30,
-    marginBottom: 50,
+  formCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    marginBottom: 16,
+    ...SHADOW.card,
   },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  tipCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    marginBottom: 18,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.tealBright,
+    ...SHADOW.card,
+  },
+  tipTitle: {
+    fontSize: 14,
+    fontWeight: FONTS.semibold,
+    color: COLORS.navyDeep,
+    marginBottom: 4,
+  },
+  tipText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
+  },
 });
 
 export default AddDepartment;

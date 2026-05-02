@@ -1,16 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { 
-    getDepartments, 
-    createDepartment, 
-    updateDepartment, 
-    deleteDepartment 
+const {
+  getDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
 } = require('../controllers/departmentController');
 
-// Define API endpoints for Department CRUD
-router.get('/', getDepartments);        // Read all
-router.post('/', createDepartment);      // Create
-router.put('/:id', updateDepartment);    // Update
-router.delete('/:id', deleteDepartment); // Delete
+router.route('/')
+  .get(getDepartments)
+  .post(createDepartment);
+
+router.route('/:id')
+  .put(updateDepartment)
+  .delete(deleteDepartment);
 
 module.exports = router;

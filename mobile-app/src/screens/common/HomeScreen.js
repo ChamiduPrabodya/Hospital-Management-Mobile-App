@@ -25,6 +25,7 @@ const ADMIN_CARDS = [
   { key: 'Admin', label: 'Admin Dashboard', sub: 'Manage operations', code: 'ADM' },
   { key: 'Appointments', label: 'Appointments', sub: 'Review bookings', code: 'APT' },
   { key: 'Reports', label: 'Reports', sub: 'Generate and view', code: 'RPT' },
+  { key: 'DepartmentList', label: 'Departments', sub: 'Manage hospital wings', code: 'DPT' },
 ];
 
 const roleContent = (role) => {

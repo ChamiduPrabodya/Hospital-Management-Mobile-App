@@ -34,6 +34,8 @@ import ProfileScreen           from '../screens/common/ProfileScreen';
 import AdminDashboardScreen    from '../screens/admin/AdminDashboardScreen';
 import UserListScreen          from '../screens/admin/UserListScreen';
 import PatientDetailsScreen    from '../screens/admin/PatientDetailsScreen';
+import DepartmentList         from '../screens/departments/DepartmentList';
+import AddDepartment          from '../screens/departments/AddDepartment';
 import { AuthContext }         from '../context/AuthContext';
 
 // ── Design tokens (mirrors your theme) ───────────────────────────────────────
@@ -430,6 +432,8 @@ export default function MainNavigator() {
       <Stack.Screen name="ComplaintForm"       component={ComplaintFormScreen} />
       <Stack.Screen name="ReportGenerate"      component={ReportGenerateScreen} />
       <Stack.Screen name="ReportDetails"       component={ReportDetailsScreen} />
+      <Stack.Screen name="DepartmentList"      component={DepartmentList} />
+      <Stack.Screen name="AddDepartment"       component={AddDepartment} />
       <Stack.Screen name="Users"               component={UserListScreen} />
       <Stack.Screen name="PatientDetails"      component={PatientDetailsScreen} />
     </Stack.Navigator>
