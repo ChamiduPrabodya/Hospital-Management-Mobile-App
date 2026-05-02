@@ -4,7 +4,14 @@
     "slug": "hospital-management-mobile-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./src/assets/victoria-logo.png",
     "platforms": ["ios", "android"],
-    "assetBundlePatterns": ["**/*"]
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/victoria-logo.png",
+        "backgroundColor": "#ffffff"
+      }
+    }
   }
 }
