@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const mongoose = require('mongoose');
 const { errorHandler } = require('./middleware/error.middleware');
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
@@ -35,7 +36,15 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/medical-documents', medicalDocumentRoutes);
 
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ message: 'Hospital Management API is running' });
+  res.status(200).json({
+    message: 'Hospital Management API is running',
+    db: {
+      name: mongoose.connection?.name || null,
+      host: mongoose.connection?.host || null,
+      readyState: mongoose.connection?.readyState ?? null,
+    },
+    mongoMode: process.env.MONGO_URI_SOURCE || process.env.MONGO_TARGET || 'auto',
+  });
 });
 
 app.use(errorHandler);

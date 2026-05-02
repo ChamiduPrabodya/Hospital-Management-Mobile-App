@@ -8,9 +8,19 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { deleteUserApi, getUsersApi } from '../../api/userApi';
+import {
+  deleteUserApi,
+  getUsersApi,
+  permanentlyDeleteUserApi,
+  reactivateUserApi,
+} from '../../api/userApi';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -23,7 +33,39 @@ const roleColor = (role) => {
   return { bg: '#FEF3C7', text: COLORS.warning };
 };
 
-const UserCard = ({ user, isCurrentUser, disabled, onDelete, isPatientView, onPress }) => {
+const buildPermanentDeleteErrorMessage = (error) => {
+  const fallback = error.response?.data?.message || 'Could not permanently delete this patient';
+  const linked = error.response?.data?.data;
+
+  if (!linked || typeof linked !== 'object') {
+    return fallback;
+  }
+
+  const labels = [
+    ['appointmentCount', 'appointments'],
+    ['paymentCount', 'payments'],
+    ['complaintCount', 'complaints'],
+    ['medicalDocumentCount', 'medical documents'],
+  ]
+    .filter(([key]) => Number(linked[key]) > 0)
+    .map(([key, label]) => `${linked[key]} ${label}`);
+
+  if (labels.length === 0) {
+    return fallback;
+  }
+
+  return `${fallback}. Linked records: ${labels.join(', ')}.`;
+};
+
+const UserCard = ({
+  user,
+  isCurrentUser,
+  disabled,
+  onDelete,
+  onReactivate,
+  isPatientView,
+  onPress,
+}) => {
   const rc = roleColor(user.role);
 
   return (
@@ -61,14 +103,27 @@ const UserCard = ({ user, isCurrentUser, disabled, onDelete, isPatientView, onPr
           </View>
         </View>
       </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.deleteBtn, (disabled || isCurrentUser) && styles.disabledBtn]}
-        onPress={() => onDelete(user)}
-        disabled={disabled || isCurrentUser}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.deleteBtnText}>Delete</Text>
-      </TouchableOpacity>
+      <View style={styles.actionColumn}>
+        {user.isActive === false ? (
+          <TouchableOpacity
+            style={[styles.reactivateBtn, disabled && styles.disabledBtn]}
+            onPress={() => onReactivate(user)}
+            disabled={disabled}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.reactivateBtnText}>Reactivate</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.deleteBtn, (disabled || isCurrentUser) && styles.disabledBtn]}
+            onPress={() => onDelete(user)}
+            disabled={disabled || isCurrentUser}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.deleteBtnText}>Delete</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 };
@@ -88,10 +143,20 @@ const UserListScreen = ({ navigation, route }) => {
     [roleFilter, users]
   );
 
+  const activeCount = useMemo(
+    () => visibleUsers.filter((user) => user.isActive !== false).length,
+    [visibleUsers]
+  );
+
+  const inactiveCount = useMemo(
+    () => visibleUsers.filter((user) => user.isActive === false).length,
+    [visibleUsers]
+  );
+
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getUsersApi();
+      const res = await getUsersApi({ includeInactive: true });
       const userData = Array.isArray(res.data) ? res.data : res.data?.data;
       setUsers(Array.isArray(userData) ? userData : []);
     } catch (error) {
@@ -109,9 +174,16 @@ const UserListScreen = ({ navigation, route }) => {
   );
 
   const handleDeleteUser = (user) => {
+    Keyboard.dismiss();
     setPendingDeleteUser(user);
     setDeleteReason('');
   };
+
+  const closeDeleteModal = useCallback(() => {
+    Keyboard.dismiss();
+    setPendingDeleteUser(null);
+    setDeleteReason('');
+  }, []);
 
   const confirmDeleteUser = async () => {
     if (!pendingDeleteUser) {
@@ -127,14 +199,76 @@ const UserListScreen = ({ navigation, route }) => {
     try {
       setActionLoadingId(pendingDeleteUser._id);
       await deleteUserApi(pendingDeleteUser._id, normalizedReason);
-      setUsers((prev) => prev.filter((u) => u._id !== pendingDeleteUser._id));
-      setPendingDeleteUser(null);
-      setDeleteReason('');
+      await loadUsers();
+      closeDeleteModal();
+      Alert.alert('Success', 'User deactivated successfully');
     } catch (error) {
       Alert.alert('Delete Failed', error.response?.data?.message || 'Could not delete user');
     } finally {
       setActionLoadingId(null);
     }
+  };
+
+  const confirmPermanentDeleteUser = () => {
+    if (!pendingDeleteUser) {
+      return;
+    }
+
+    Alert.alert(
+      'Permanent Delete',
+      `Permanently delete ${pendingDeleteUser.name || pendingDeleteUser.email}? This cannot be undone and only works when the patient has no linked appointments, payments, complaints, or medical documents.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoadingId(pendingDeleteUser._id);
+              await permanentlyDeleteUserApi(pendingDeleteUser._id);
+              await loadUsers();
+              closeDeleteModal();
+              Alert.alert('Success', 'Patient permanently deleted successfully');
+            } catch (error) {
+              Alert.alert(
+                'Permanent Delete Failed',
+                buildPermanentDeleteErrorMessage(error)
+              );
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReactivateUser = (user) => {
+    Alert.alert(
+      'Reactivate User',
+      `Reactivate ${user.name || user.email}? They will be able to sign in again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reactivate',
+          onPress: async () => {
+            try {
+              setActionLoadingId(user._id);
+              await reactivateUserApi(user._id);
+              await loadUsers();
+              Alert.alert('Success', 'User reactivated successfully');
+            } catch (error) {
+              Alert.alert(
+                'Reactivate Failed',
+                error.response?.data?.message || 'Could not reactivate user'
+              );
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading && visibleUsers.length === 0) {
@@ -145,7 +279,11 @@ const UserListScreen = ({ navigation, route }) => {
     <View style={styles.root}>
       <ScreenHeader
         title={isPatientView ? 'Patients' : 'Users'}
-        subtitle={isPatientView ? `${visibleUsers.length} active patients` : `${visibleUsers.length} active accounts`}
+        subtitle={
+          isPatientView
+            ? `${activeCount} active, ${inactiveCount} inactive patients`
+            : `${activeCount} active, ${inactiveCount} inactive accounts`
+        }
         onBack={() => navigation.goBack()}
       />
       <FlatList
@@ -162,6 +300,7 @@ const UserListScreen = ({ navigation, route }) => {
             isCurrentUser={item._id === userInfo?._id}
             disabled={actionLoadingId === item._id}
             onDelete={handleDeleteUser}
+            onReactivate={handleReactivateUser}
             isPatientView={isPatientView}
             onPress={isPatientView ? (user) => navigation.navigate('PatientDetails', {
               patientId: user._id,
@@ -175,58 +314,90 @@ const UserListScreen = ({ navigation, route }) => {
         visible={Boolean(pendingDeleteUser)}
         transparent
         animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
         onRequestClose={() => {
           if (!actionLoadingId) {
-            setPendingDeleteUser(null);
-            setDeleteReason('');
+            closeDeleteModal();
           }
         }}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Deactivate User</Text>
-            <Text style={styles.modalText}>
-              {`Add a reason for deactivating ${pendingDeleteUser?.name || pendingDeleteUser?.email}. This message will be shown if they try to log in.`}
-            </Text>
-            <TextInput
-              style={styles.reasonInput}
-              value={deleteReason}
-              onChangeText={setDeleteReason}
-              placeholder="Reason for deactivation"
-              placeholderTextColor={COLORS.textMuted}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              editable={!actionLoadingId}
-              maxLength={500}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => {
-                  if (!actionLoadingId) {
-                    setPendingDeleteUser(null);
-                    setDeleteReason('');
-                  }
-                }}
-                disabled={Boolean(actionLoadingId)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmBtn, actionLoadingId && styles.disabledBtn]}
-                onPress={confirmDeleteUser}
-                disabled={Boolean(actionLoadingId)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.confirmBtnText}>
-                  {actionLoadingId ? 'Saving...' : 'Deactivate'}
+        <KeyboardAvoidingView
+          style={styles.modalRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 28 : 0}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={Keyboard.dismiss}>
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
+            >
+              <Pressable style={styles.modalCard} onPress={() => {}}>
+                <Text style={styles.modalTitle}>Deactivate User</Text>
+                <Text style={styles.modalText}>
+                  {`Add a reason for deactivating ${pendingDeleteUser?.name || pendingDeleteUser?.email}. This message will be shown if they try to log in.`}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+                {pendingDeleteUser?.role === 'patient' ? (
+                  <Text style={styles.modalWarningText}>
+                    Permanent delete is only allowed when this patient has no linked appointments, payments, complaints, or medical documents.
+                  </Text>
+                ) : null}
+                <TextInput
+                  style={styles.reasonInput}
+                  value={deleteReason}
+                  onChangeText={setDeleteReason}
+                  placeholder="Reason for deactivation"
+                  placeholderTextColor={COLORS.textMuted}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  editable={!actionLoadingId}
+                  maxLength={500}
+                  returnKeyType="done"
+                  blurOnSubmit
+                  onSubmitEditing={Keyboard.dismiss}
+                />
+                <View style={styles.modalActions}>
+                  {pendingDeleteUser?.role === 'patient' ? (
+                    <TouchableOpacity
+                      style={[styles.permanentBtn, actionLoadingId && styles.disabledBtn]}
+                      onPress={confirmPermanentDeleteUser}
+                      disabled={Boolean(actionLoadingId)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.permanentBtnText}>
+                        {actionLoadingId ? 'Saving...' : 'Permanent Delete'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => {
+                      if (!actionLoadingId) {
+                        closeDeleteModal();
+                      }
+                    }}
+                    disabled={Boolean(actionLoadingId)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.confirmBtn, actionLoadingId && styles.disabledBtn]}
+                    onPress={confirmDeleteUser}
+                    disabled={Boolean(actionLoadingId)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.confirmBtnText}>
+                      {actionLoadingId ? 'Saving...' : 'Deactivate'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </ScrollView>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -282,10 +453,30 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   deleteBtnText: { color: COLORS.danger, fontSize: 11, fontWeight: FONTS.bold },
+  actionColumn: {
+    marginLeft: 8,
+  },
+  reactivateBtn: {
+    backgroundColor: COLORS.successBg,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+  },
+  reactivateBtnText: {
+    color: COLORS.success,
+    fontSize: 11,
+    fontWeight: FONTS.bold,
+  },
   disabledBtn: { opacity: 0.45 },
+  modalRoot: {
+    flex: 1,
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.55)',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
   },
@@ -293,6 +484,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.lg,
     padding: 18,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
     ...SHADOW.card,
   },
   modalTitle: {
@@ -305,7 +499,14 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 20,
     marginTop: 8,
+    marginBottom: 10,
+  },
+  modalWarningText: {
+    fontSize: 12,
+    color: COLORS.warning,
+    lineHeight: 18,
     marginBottom: 12,
+    fontWeight: FONTS.semibold,
   },
   reasonInput: {
     minHeight: 108,
@@ -342,6 +543,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.danger,
   },
   confirmBtnText: {
+    fontSize: 12,
+    color: COLORS.white,
+    fontWeight: FONTS.bold,
+  },
+  permanentBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.navyDeep,
+  },
+  permanentBtnText: {
     fontSize: 12,
     color: COLORS.white,
     fontWeight: FONTS.bold,
