@@ -123,6 +123,11 @@ const HomeScreen = ({ navigation }) => {
   const pendingCount = doctorAppointments.filter((item) => item.status === 'pending').length;
   const recentAppointments = doctorAppointments.slice(0, 3);
 
+  const handleQuickAccessPress = (target) => {
+    // Route tab switches through the parent stack so shortcuts always land on the tab screen.
+    navigation.getParent()?.navigate('Tabs', { screen: target });
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.navyDeep} />
@@ -161,7 +166,7 @@ const HomeScreen = ({ navigation }) => {
         <Text style={styles.sectionSub}>{content.sub}</Text>
 
         {content.cards.map((item) => (
-          <QuickCard key={item.key} item={item} onPress={() => navigation.navigate(item.key)} />
+          <QuickCard key={item.key} item={item} onPress={() => handleQuickAccessPress(item.key)} />
         ))}
 
         {isDoctor ? (
