@@ -6,8 +6,6 @@ const generateToken = require('../utils/generateToken');
 const asyncHandler = require('../utils/asyncHandler');
 const {
   isValidEmail,
-  normalizePhone,
-  isValidPhone,
   isStrongPassword,
   normalizeUserProfilePayload,
   validateUserProfilePayload,
@@ -16,12 +14,15 @@ const {
 const isValidOtp = (otp) => /^\d{6}$/.test(String(otp));
 const OTP_EXPIRY_MINUTES = 10;
 const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest('hex');
+const isInactive = (user) => user && user.isActive === false;
+
 const getDemoEmails = () =>
   new Set([
     String(process.env.ADMIN_EMAIL || 'admin@example.com').trim().toLowerCase(),
     'patient@example.com',
     String(process.env.DOCTOR_EMAIL || 'doctor@example.com').trim().toLowerCase(),
   ]);
+
 const getDemoCredentials = () =>
   new Map([
     [
@@ -34,10 +35,23 @@ const getDemoCredentials = () =>
       String(process.env.DOCTOR_PASSWORD || 'doctor123').trim(),
     ],
   ]);
+
 const shouldBootstrapDemoUser = (email) =>
   process.env.NODE_ENV !== 'production' &&
   process.env.AUTO_BOOTSTRAP_DEMO_USERS !== 'false' &&
   getDemoEmails().has(String(email || '').trim().toLowerCase());
+
+const buildDeactivatedLoginMessage = (user) => {
+  const reason = String(user?.deactivationReason || '').trim();
+  const baseMessage = reason
+    ? `Your account has been deactivated. Reason: ${reason}`
+    : 'Your account has been deactivated by an administrator';
+
+  return user?.role === 'patient'
+    ? `${baseMessage}. You can register again with this email.`
+    : `${baseMessage}. Please contact an admin if you need access again.`;
+};
+
 const buildAuthPayload = (user, token) => ({
   token,
   _id: user._id,
@@ -69,34 +83,60 @@ exports.registerUser = asyncHandler(async (req, res) => {
   }
 
   const existingUser = await User.findOne({ email });
-  if (existingUser) {
+  if (existingUser && !isInactive(existingUser)) {
     return res.status(409).json({ message: 'Email is already registered' });
   }
 
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  let role = 'patient';
-  if (req.body.role && ['patient', 'doctor', 'admin'].includes(req.body.role)) {
-    role = req.body.role;
-  } else {
-    // Bootstrap for academic demos: if no admin exists, create the first account as admin.
-    const adminExists = await User.exists({ role: 'admin' });
-    if (!adminExists) role = 'admin';
+  if (isInactive(existingUser) && existingUser.role !== 'patient') {
+    return res.status(409).json({
+      message: 'This email belongs to a deactivated staff account. Please contact an admin to reactivate it.',
+    });
   }
 
-  const user = await User.create({
-    name,
-    email,
-    phone,
-    address,
-    password: hashedPassword,
-    role,
-  });
+  let user;
+
+  if (isInactive(existingUser)) {
+    user = await User.findOneAndUpdate(
+      { _id: existingUser._id },
+      {
+        name,
+        email,
+        phone,
+        address,
+        password: hashedPassword,
+        role: 'patient',
+        isActive: true,
+        deletedAt: null,
+        deactivationReason: null,
+      },
+      { new: true }
+    );
+  } else {
+    let role = 'patient';
+    if (req.body.role && ['patient', 'doctor', 'admin'].includes(req.body.role)) {
+      role = req.body.role;
+    } else {
+      const adminExists = await User.exists({ role: 'admin' });
+      if (!adminExists) role = 'admin';
+    }
+
+    user = await User.create({
+      name,
+      email,
+      phone,
+      address,
+      password: hashedPassword,
+      role,
+      deactivationReason: null,
+    });
+  }
 
   const token = generateToken(user._id);
 
-  res.status(201).json(buildAuthPayload(user, token));
+  res.status(isInactive(existingUser) ? 200 : 201).json(buildAuthPayload(user, token));
 });
 
 exports.loginUser = asyncHandler(async (req, res) => {
@@ -115,15 +155,19 @@ exports.loginUser = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Password must be at least 6 characters' });
   }
 
-  let user = await User.findOne({ email, isActive: { $ne: false } });
+  let user = await User.findOne({ email });
 
   if (!user && shouldBootstrapDemoUser(email)) {
     await ensureDemoAuthData();
-    user = await User.findOne({ email, isActive: { $ne: false } });
+    user = await User.findOne({ email });
   }
 
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials' });
+  }
+
+  if (isInactive(user)) {
+    return res.status(403).json({ message: buildDeactivatedLoginMessage(user) });
   }
 
   let isMatch = await bcrypt.compare(password, user.password);
@@ -133,11 +177,17 @@ exports.loginUser = asyncHandler(async (req, res) => {
 
     if (demoPassword && password === demoPassword) {
       await ensureDemoAuthData();
-      user = await User.findOne({ email, isActive: { $ne: false } });
+      user = await User.findOne({ email });
 
-      if (user) {
-        isMatch = await bcrypt.compare(password, user.password);
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid credentials' });
       }
+
+      if (isInactive(user)) {
+        return res.status(403).json({ message: buildDeactivatedLoginMessage(user) });
+      }
+
+      isMatch = await bcrypt.compare(password, user.password);
     }
   }
 

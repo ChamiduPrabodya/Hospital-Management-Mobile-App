@@ -8,7 +8,8 @@ jest.mock('../utils/apiResponse', () => ({
 }));
 
 const User = require('../models/user.model');
-const { updateUser } = require('../controllers/user.controller');
+const { sendSuccess } = require('../utils/apiResponse');
+const { updateUser, deleteUser } = require('../controllers/user.controller');
 
 const createRes = () => {
   const res = {};
@@ -100,5 +101,50 @@ describe('user.controller updateUser', () => {
     );
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(updatedUser);
+  });
+});
+
+describe('user.controller deleteUser', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('requires a deactivation reason', async () => {
+    const req = {
+      params: { id: '507f1f77bcf86cd799439011' },
+      user: { _id: '507f1f77bcf86cd799439099', role: 'admin' },
+      body: { reason: ' ' },
+    };
+    const res = createRes();
+
+    await deleteUser(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: 'A deactivation reason is required' });
+  });
+
+  it('stores the deactivation reason and soft-deletes the user', async () => {
+    const user = {
+      _id: '507f1f77bcf86cd799439011',
+      isActive: true,
+      deletedAt: null,
+      deactivationReason: null,
+      save: jest.fn().mockResolvedValue(true),
+    };
+    User.findOne.mockResolvedValue(user);
+    const req = {
+      params: { id: '507f1f77bcf86cd799439011' },
+      user: { _id: '507f1f77bcf86cd799439099', role: 'admin' },
+      body: { reason: 'Requested account closure' },
+    };
+    const res = createRes();
+
+    await deleteUser(req, res, jest.fn());
+
+    expect(user.isActive).toBe(false);
+    expect(user.deletedAt).toBeInstanceOf(Date);
+    expect(user.deactivationReason).toBe('Requested account closure');
+    expect(user.save).toHaveBeenCalled();
+    expect(sendSuccess).toHaveBeenCalledWith(res, 200, 'User deactivated successfully');
   });
 });
