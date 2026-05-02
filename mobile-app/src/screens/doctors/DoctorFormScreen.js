@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { createDoctorApi, getDoctorsApi, updateDoctorApi } from '../../api/doctorApi';
+import { getAllDepartments } from '../../api/departmentApi';
 import { createServiceApi, getServicesApi } from '../../api/serviceApi';
 import { uploadDoctorImageApi } from '../../api/uploadApi';
 import { validateEmail, validateStrongPassword } from '../../utils/validators';
@@ -26,6 +27,8 @@ const DoctorFormScreen = ({ route, navigation }) => {
   const { doctor } = route.params || {};
   const [name, setName] = useState(doctor?.name || '');
   const [specialization, setSpecialization] = useState(doctor?.specialization || '');
+  const [departmentId, setDepartmentId] = useState(doctor?.departmentId?._id || doctor?.departmentId || '');
+  const [departments, setDepartments] = useState([]);
   const [manualSpecialization, setManualSpecialization] = useState('');
   const [useOtherSpecialization, setUseOtherSpecialization] = useState(false);
   const [existingSpecializations, setExistingSpecializations] = useState([]);
@@ -56,6 +59,12 @@ const DoctorFormScreen = ({ route, navigation }) => {
   );
   const [loading, setLoading] = useState(false);
 
+  const filteredServiceOptions = useMemo(() => (
+    departmentId
+      ? serviceOptions.filter((item) => (item.departmentId?._id || item.departmentId) === departmentId)
+      : serviceOptions
+  ), [departmentId, serviceOptions]);
+
   const sectionOptions = useMemo(() => {
     const values = [...existingSpecializations];
     if (doctor?.specialization && !values.includes(doctor.specialization)) {
@@ -67,7 +76,11 @@ const DoctorFormScreen = ({ route, navigation }) => {
   useEffect(() => {
     (async () => {
       try {
-        const [doctorResponse, serviceResponse] = await Promise.all([getDoctorsApi(), getServicesApi()]);
+        const [doctorResponse, serviceResponse, departmentResponse] = await Promise.all([
+          getDoctorsApi(),
+          getServicesApi(),
+          getAllDepartments(),
+        ]);
         const doctorData = Array.isArray(doctorResponse.data) ? doctorResponse.data : doctorResponse.data?.data;
         const sections = Array.isArray(doctorData)
           ? doctorData
@@ -77,6 +90,10 @@ const DoctorFormScreen = ({ route, navigation }) => {
         setExistingSpecializations(Array.from(new Set(sections)).sort((a, b) => a.localeCompare(b)));
         const services = Array.isArray(serviceResponse.data) ? serviceResponse.data : serviceResponse.data?.data;
         setServiceOptions(Array.isArray(services) ? services.filter((item) => item.availabilityStatus !== false) : []);
+        const departmentData = Array.isArray(departmentResponse.data)
+          ? departmentResponse.data
+          : departmentResponse.data?.data;
+        setDepartments(Array.isArray(departmentData) ? departmentData : []);
       } catch (error) {
         console.log('Failed to load doctor form options:', error.response?.data?.message || error.message);
       }
@@ -143,6 +160,14 @@ const DoctorFormScreen = ({ route, navigation }) => {
     setManualSpecialization('');
   };
 
+  const selectDepartment = (nextDepartmentId) => {
+    setDepartmentId(nextDepartmentId);
+    setDoctorServices((prev) => prev.filter((item) => {
+      const linkedService = serviceOptions.find((service) => service._id === item.serviceId);
+      return linkedService && (linkedService.departmentId?._id || linkedService.departmentId) === nextDepartmentId;
+    }));
+  };
+
   const isDoctorServiceSelected = (serviceId) => doctorServices.some((item) => item.serviceId === serviceId);
 
   const toggleDoctorService = (service) => {
@@ -178,6 +203,11 @@ const DoctorFormScreen = ({ route, navigation }) => {
       return;
     }
 
+    if (!departmentId) {
+      Alert.alert('Error', 'Please select a department before creating a new service');
+      return;
+    }
+
     if (Number.isNaN(price) || price <= 0 || !Number.isInteger(duration) || duration <= 0) {
       Alert.alert('Error', 'Please enter a valid service price and duration');
       return;
@@ -186,6 +216,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
     setAddingService(true);
     try {
       const response = await createServiceApi({
+        departmentId,
         serviceName: newServiceName.trim(),
         description: newServiceDescription.trim(),
         price,
@@ -221,7 +252,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
       ? formatManualSpecialization(manualSpecialization).trim()
       : specialization.trim();
 
-    if (!name || !finalSpecialization || experience === '') { Alert.alert('Error', 'Please fill required fields'); return; }
+    if (!name || !departmentId || !finalSpecialization || experience === '') { Alert.alert('Error', 'Please fill required fields'); return; }
     if (!doctor && (!email.trim() || !password.trim())) {
       Alert.alert('Error', 'Please add a unique email and password for the doctor login');
       return;
@@ -264,6 +295,7 @@ const DoctorFormScreen = ({ route, navigation }) => {
       const normalizedEmail = email.trim().toLowerCase();
       const data = {
         name,
+        departmentId,
         specialization: finalSpecialization,
         experience: exp,
         description,
@@ -317,6 +349,24 @@ const DoctorFormScreen = ({ route, navigation }) => {
             </View>
           </TouchableOpacity>
           <CustomInput label="Full Name" value={name} onChangeText={setName} placeholder="Dr. Full Name" />
+          <Text style={styles.inputLabel}>Department</Text>
+          <View style={styles.sectionPicker}>
+            {departments.map((department) => {
+              const selected = departmentId === department._id;
+              return (
+                <TouchableOpacity
+                  key={department._id}
+                  style={[styles.sectionChip, selected && styles.sectionChipSelected]}
+                  onPress={() => selectDepartment(department._id)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.sectionChipText, selected && styles.sectionChipTextSelected]}>
+                    {department.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <Text style={styles.inputLabel}>Specialized Section</Text>
           <View style={styles.sectionPicker}>
             {sectionOptions.map((section) => {
@@ -398,10 +448,14 @@ const DoctorFormScreen = ({ route, navigation }) => {
             />
           </View>
 
-          {serviceOptions.length === 0 ? (
-            <Text style={styles.emptyText}>Create hospital services first, then assign them to doctors here.</Text>
+          {filteredServiceOptions.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {departmentId
+                ? 'No services are available for this department yet. Add one above to continue.'
+                : 'Choose a department first, then assign services here.'}
+            </Text>
           ) : (
-            serviceOptions.map((service) => {
+            filteredServiceOptions.map((service) => {
               const selected = isDoctorServiceSelected(service._id);
               const selectedService = doctorServices.find((item) => item.serviceId === service._id);
               return (

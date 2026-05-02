@@ -1,17 +1,35 @@
 const Service = require('../models/service.model');
 const Appointment = require('../models/appointment.model');
+const Department = require('../models/department.model');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/apiResponse');
-const { validateObjectIdParam } = require('../utils/validateObjectId');
+const { validateObjectIdParam, isValidObjectId } = require('../utils/validateObjectId');
 
 exports.createService = asyncHandler(async (req, res) => {
-  const { serviceName, description, price, duration, availabilityStatus } = req.body;
+  const {
+    departmentId,
+    serviceName,
+    description,
+    price,
+    duration,
+    availabilityStatus,
+  } = req.body;
 
-  if (!serviceName || !description || price === undefined || duration === undefined) {
-    return res.status(400).json({ message: 'Service name, description, price and duration are required' });
+  if (!departmentId || !serviceName || !description || price === undefined || duration === undefined) {
+    return res.status(400).json({ message: 'Department, service name, description, price and duration are required' });
+  }
+
+  if (!isValidObjectId(departmentId)) {
+    return res.status(400).json({ message: 'Invalid department ID' });
+  }
+
+  const department = await Department.findById(departmentId);
+  if (!department) {
+    return res.status(404).json({ message: 'Department not found' });
   }
 
   const service = await Service.create({
+    departmentId,
     serviceName,
     description,
     price,
@@ -19,18 +37,22 @@ exports.createService = asyncHandler(async (req, res) => {
     availabilityStatus: availabilityStatus !== undefined ? availabilityStatus : true,
   });
 
-  res.status(201).json(service);
+  const populatedService = await Service.findById(service._id).populate('departmentId', 'name location');
+
+  res.status(201).json(populatedService);
 });
 
 exports.getServices = asyncHandler(async (req, res) => {
-  const services = await Service.find({ isActive: { $ne: false } });
+  const services = await Service.find({ isActive: { $ne: false } })
+    .populate('departmentId', 'name location');
   res.status(200).json(services);
 });
 
 exports.getServiceById = asyncHandler(async (req, res) => {
   if (!validateObjectIdParam(res, req.params.id, 'service ID')) return;
 
-  const service = await Service.findOne({ _id: req.params.id, isActive: { $ne: false } });
+  const service = await Service.findOne({ _id: req.params.id, isActive: { $ne: false } })
+    .populate('departmentId', 'name location');
   if (!service) {
     return res.status(404).json({ message: 'Service not found' });
   }
@@ -46,6 +68,18 @@ exports.updateService = asyncHandler(async (req, res) => {
   }
 
   const updates = {};
+  if (req.body.departmentId !== undefined) {
+    if (!isValidObjectId(req.body.departmentId)) {
+      return res.status(400).json({ message: 'Invalid department ID' });
+    }
+
+    const department = await Department.findById(req.body.departmentId);
+    if (!department) {
+      return res.status(404).json({ message: 'Department not found' });
+    }
+
+    updates.departmentId = req.body.departmentId;
+  }
   if (req.body.serviceName !== undefined) updates.serviceName = req.body.serviceName;
   if (req.body.description !== undefined) updates.description = req.body.description;
   if (req.body.price !== undefined) updates.price = req.body.price;
@@ -55,7 +89,9 @@ exports.updateService = asyncHandler(async (req, res) => {
   Object.assign(service, updates);
   await service.save();
 
-  res.status(200).json(service);
+  const populatedService = await Service.findById(service._id).populate('departmentId', 'name location');
+
+  res.status(200).json(populatedService);
 });
 
 exports.deleteService = asyncHandler(async (req, res) => {
