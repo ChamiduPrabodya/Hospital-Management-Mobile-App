@@ -108,7 +108,7 @@ describe('auth.controller registerUser', () => {
   });
 
   it('returns 409 for duplicate email addresses', async () => {
-    User.findOne.mockResolvedValue({ _id: 'existing-user' });
+    User.findOne.mockResolvedValue({ _id: 'existing-user', isActive: true });
     const req = { body: { name: 'Jane Doe', email: 'patient@example.com', phone: '0771234567', address: 'Colombo', password: 'Secret123!' } };
     const res = createRes();
 
@@ -156,6 +156,7 @@ describe('auth.controller registerUser', () => {
       address: 'Colombo',
       password: 'hashed-password',
       role: 'patient',
+      deactivationReason: null,
     });
     expect(generateToken).toHaveBeenCalledWith('user-id');
     expect(res.status).toHaveBeenCalledWith(201);
@@ -169,6 +170,73 @@ describe('auth.controller registerUser', () => {
       phone: '+94771234567',
       address: 'Colombo',
       profileImage: null,
+    });
+  });
+
+  it('reactivates a deactivated patient account with the same email', async () => {
+    User.findOne.mockResolvedValue({
+      _id: 'old-user-id',
+      role: 'patient',
+      isActive: false,
+      doctorProfileId: null,
+      profileImage: null,
+    });
+    User.findOneAndUpdate.mockResolvedValue({
+      _id: 'old-user-id',
+      name: 'Jane Doe',
+      email: 'patient@example.com',
+      role: 'patient',
+      doctorProfileId: null,
+      phone: '+94771234567',
+      address: 'Colombo',
+      profileImage: null,
+    });
+
+    const req = {
+      body: {
+        name: 'Jane Doe',
+        email: 'patient@example.com',
+        phone: '+94771234567',
+        address: 'Colombo',
+        password: 'Secret123!',
+      },
+    };
+    const res = createRes();
+
+    await registerUser(req, res, jest.fn());
+
+    expect(User.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'old-user-id' },
+      {
+        name: 'Jane Doe',
+        email: 'patient@example.com',
+        phone: '+94771234567',
+        address: 'Colombo',
+        password: 'hashed-password',
+        role: 'patient',
+        isActive: true,
+        deletedAt: null,
+        deactivationReason: null,
+      },
+      { new: true }
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('blocks self-registration for deactivated staff emails', async () => {
+    User.findOne.mockResolvedValue({
+      _id: 'old-doctor-id',
+      role: 'doctor',
+      isActive: false,
+    });
+    const req = { body: { name: 'Jane Doe', email: 'doctor@example.com', phone: '0771234567', address: 'Colombo', password: 'Secret123!' } };
+    const res = createRes();
+
+    await registerUser(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'This email belongs to a deactivated staff account. Please contact an admin to reactivate it.',
     });
   });
 });
@@ -223,14 +291,30 @@ describe('auth.controller loginUser', () => {
 
     await loginUser(req, res, jest.fn());
 
-    expect(User.findOne).toHaveBeenCalledWith({
-      email: 'patient@example.com',
-      isActive: { $ne: false },
-    });
+    expect(User.findOne).toHaveBeenCalledWith({ email: 'patient@example.com' });
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({
       message: 'Invalid credentials',
     });
+  });
+
+  it('shows the deactivation reason when an inactive user tries to log in', async () => {
+    User.findOne.mockResolvedValue({
+      _id: 'user-id',
+      role: 'patient',
+      isActive: false,
+      deactivationReason: 'Repeated no-show appointments',
+    });
+    const req = { body: { email: 'patient@example.com', password: 'secret123' } };
+    const res = createRes();
+
+    await loginUser(req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      message: 'Your account has been deactivated. Reason: Repeated no-show appointments. You can register again with this email.',
+    });
+    expect(bcrypt.compare).not.toHaveBeenCalled();
   });
 
   it('rejects wrong passwords', async () => {
@@ -274,10 +358,7 @@ describe('auth.controller loginUser', () => {
 
     await loginUser(req, res, jest.fn());
 
-    expect(User.findOne).toHaveBeenCalledWith({
-      email: 'patient@example.com',
-      isActive: { $ne: false },
-    });
+    expect(User.findOne).toHaveBeenCalledWith({ email: 'patient@example.com' });
     expect(bcrypt.compare).toHaveBeenCalledWith('secret123', 'hashed-password');
     expect(generateToken).toHaveBeenCalledWith('user-id');
     expect(res.status).toHaveBeenCalledWith(200);

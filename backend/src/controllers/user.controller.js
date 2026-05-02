@@ -69,6 +69,7 @@ exports.updateUser = asyncHandler(async (req, res) => {
 
 exports.deleteUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const reason = String(req.body?.reason || '').trim();
 
   if (!validateObjectIdParam(res, id, 'user ID')) return;
 
@@ -84,6 +85,14 @@ exports.deleteUser = asyncHandler(async (req, res) => {
     });
   }
 
+  if (!reason) {
+    return res.status(400).json({ message: 'A deactivation reason is required' });
+  }
+
+  if (reason.length > 500) {
+    return res.status(400).json({ message: 'Deactivation reason cannot exceed 500 characters' });
+  }
+
   const user = await User.findOne({ _id: id, isActive: { $ne: false } });
   if (!user) {
     return res.status(404).json({ message: 'User not found' });
@@ -91,6 +100,7 @@ exports.deleteUser = asyncHandler(async (req, res) => {
 
   user.isActive = false;
   user.deletedAt = new Date();
+  user.deactivationReason = reason;
   await user.save();
 
   return sendSuccess(res, 200, 'User deactivated successfully');

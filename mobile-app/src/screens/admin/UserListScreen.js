@@ -1,5 +1,14 @@
 import React, { useCallback, useContext, useMemo, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { deleteUserApi, getUsersApi } from '../../api/userApi';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -68,6 +77,8 @@ const UserListScreen = ({ navigation, route }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const { userInfo } = useContext(AuthContext);
   const roleFilter = route?.params?.role || null;
   const isPatientView = roleFilter === 'patient';
@@ -98,28 +109,32 @@ const UserListScreen = ({ navigation, route }) => {
   );
 
   const handleDeleteUser = (user) => {
-    Alert.alert(
-      'Delete User',
-      `Deactivate ${user.name || user.email}? The account will no longer be able to log in.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setActionLoadingId(user._id);
-              await deleteUserApi(user._id);
-              setUsers((prev) => prev.filter((u) => u._id !== user._id));
-            } catch (error) {
-              Alert.alert('Delete Failed', error.response?.data?.message || 'Could not delete user');
-            } finally {
-              setActionLoadingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setPendingDeleteUser(user);
+    setDeleteReason('');
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!pendingDeleteUser) {
+      return;
+    }
+
+    const normalizedReason = deleteReason.trim();
+    if (!normalizedReason) {
+      Alert.alert('Reason Required', 'Please enter a reason before deactivating this account.');
+      return;
+    }
+
+    try {
+      setActionLoadingId(pendingDeleteUser._id);
+      await deleteUserApi(pendingDeleteUser._id, normalizedReason);
+      setUsers((prev) => prev.filter((u) => u._id !== pendingDeleteUser._id));
+      setPendingDeleteUser(null);
+      setDeleteReason('');
+    } catch (error) {
+      Alert.alert('Delete Failed', error.response?.data?.message || 'Could not delete user');
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   if (loading && visibleUsers.length === 0) {
@@ -155,6 +170,64 @@ const UserListScreen = ({ navigation, route }) => {
           />
         )}
       />
+
+      <Modal
+        visible={Boolean(pendingDeleteUser)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!actionLoadingId) {
+            setPendingDeleteUser(null);
+            setDeleteReason('');
+          }
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Deactivate User</Text>
+            <Text style={styles.modalText}>
+              {`Add a reason for deactivating ${pendingDeleteUser?.name || pendingDeleteUser?.email}. This message will be shown if they try to log in.`}
+            </Text>
+            <TextInput
+              style={styles.reasonInput}
+              value={deleteReason}
+              onChangeText={setDeleteReason}
+              placeholder="Reason for deactivation"
+              placeholderTextColor={COLORS.textMuted}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              editable={!actionLoadingId}
+              maxLength={500}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  if (!actionLoadingId) {
+                    setPendingDeleteUser(null);
+                    setDeleteReason('');
+                  }
+                }}
+                disabled={Boolean(actionLoadingId)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, actionLoadingId && styles.disabledBtn]}
+                onPress={confirmDeleteUser}
+                disabled={Boolean(actionLoadingId)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmBtnText}>
+                  {actionLoadingId ? 'Saving...' : 'Deactivate'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -210,6 +283,69 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: { color: COLORS.danger, fontSize: 11, fontWeight: FONTS.bold },
   disabledBtn: { opacity: 0.45 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    padding: 18,
+    ...SHADOW.card,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: FONTS.bold,
+    color: COLORS.navyDeep,
+  },
+  modalText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  reasonInput: {
+    minHeight: 108,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: COLORS.navyDeep,
+    backgroundColor: COLORS.bgPage,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+  },
+  cancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.bgMuted,
+  },
+  cancelBtnText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: FONTS.bold,
+  },
+  confirmBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.danger,
+  },
+  confirmBtnText: {
+    fontSize: 12,
+    color: COLORS.white,
+    fontWeight: FONTS.bold,
+  },
 });
 
 export default UserListScreen;
