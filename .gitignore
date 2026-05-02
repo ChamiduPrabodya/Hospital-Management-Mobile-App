@@ -8,4 +8,3 @@
 
 # Keep shareable examples in git
 !.env.example
-!**/.env.example
