@@ -47,6 +47,42 @@ The app is built with:
 
 ## Setup
 
+### 1. Backend setup
+
+Start in the `backend` folder:
+
+```bash
+cd backend
+npm install
+```
+
+Create a local env file from the example:
+
+```bash
+copy .env.example .env
+```
+
+Recommended local MongoDB setup:
+
+- keep `MONGO_URI_SOURCE=local`
+- set `MONGO_URI_LOCAL=mongodb://127.0.0.1:27017/hospital_management`
+- keep `BASE_URL=http://localhost:5000/api`
+
+If your team uses MongoDB Atlas instead, set one of these and switch the source:
+
+- `MONGO_URI_SOURCE=atlas`
+- `MONGO_URI=<your-atlas-uri>` or `MONGO_URI_ATLAS=<your-atlas-uri>`
+
+Run the backend:
+
+```bash
+npm run dev
+```
+
+The API will start on `http://localhost:5000` and listens on `0.0.0.0`, so other devices on the same network can reach it through your computer's LAN IP.
+
+### 2. Mobile app setup
+
 1. Clone the repository
 
 ```bash
@@ -67,6 +103,12 @@ The app now resolves the backend URL automatically:
 - `EXPO_PUBLIC_API_URL` is used first when set
 - otherwise the app reuses the current Expo LAN host and points it to port `5000`
 - if Expo host info is unavailable, it falls back to `10.0.2.2` on Android and `localhost` elsewhere
+
+Create a local mobile env file only if you need a manual override:
+
+```bash
+copy .env.example .env
+```
 
 Optional manual override:
 
@@ -249,6 +291,8 @@ npm test
 
 - If the app fails to connect on a physical device, make sure the phone and computer are on the same Wi-Fi network
 - If automatic detection is not suitable for your setup, start Expo with `EXPO_PUBLIC_API_URL=http://YOUR_IP:5000/api`
+- If the backend fails to start with a MongoDB env error, check that local mode uses `MONGO_URI_LOCAL` in `backend/.env`
+- If your team uses Atlas, switch to `MONGO_URI_SOURCE=atlas` and set `MONGO_URI` or `MONGO_URI_ATLAS`
 - If screen shows blank or crashes, restart Expo and clear cache with `npm start -- --clear`
 
 ## License
