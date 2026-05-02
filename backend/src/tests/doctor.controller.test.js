@@ -20,6 +20,10 @@ const Doctor = require('../models/doctor.model');
 const User = require('../models/user.model');
 const { createDoctor } = require('../controllers/doctor.controller');
 
+const ids = {
+  service: '507f1f77bcf86cd799439012',
+};
+
 const createRes = () => {
   const res = {};
   res.status = jest.fn().mockReturnValue(res);
@@ -136,6 +140,9 @@ describe('doctor.controller createDoctor', () => {
         experience: 5,
         email: 'Doctor@Example.com ',
         password: 'Doctor123!',
+        services: [{ serviceId: ids.service, price: 2500, duration: 30 }],
+        availabilityMode: 'daily',
+        dailyTimeSlots: ['09:00'],
       },
     };
     const res = createRes();
@@ -154,5 +161,72 @@ describe('doctor.controller createDoctor', () => {
     expect(doctor.save).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(doctor);
+  });
+
+  it('capitalizes the first letter of a manually entered specialization', async () => {
+    User.findOne.mockResolvedValue(null);
+    const doctor = {
+      _id: 'doctor-id',
+      save: jest.fn().mockResolvedValue(true),
+    };
+    Doctor.create.mockResolvedValue(doctor);
+    User.create.mockResolvedValue({ _id: 'user-id' });
+
+    const req = {
+      body: {
+        name: 'Dr Test',
+        specialization: 'neurology',
+        experience: 5,
+        email: 'doctor@example.com',
+        password: 'Doctor123!',
+        services: [{ serviceId: ids.service, price: 2500, duration: 30 }],
+        availabilityMode: 'daily',
+        dailyTimeSlots: ['09:00'],
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await createDoctor(req, res, next);
+
+    expect(Doctor.create).toHaveBeenCalledWith(expect.objectContaining({
+      specialization: 'Neurology',
+    }));
+  });
+
+  it('creates doctor profile with selected services and doctor prices', async () => {
+    User.findOne.mockResolvedValue(null);
+    const doctor = {
+      _id: 'doctor-id',
+      save: jest.fn().mockResolvedValue(true),
+    };
+    Doctor.create.mockResolvedValue(doctor);
+    User.create.mockResolvedValue({ _id: 'user-id' });
+
+    const req = {
+      body: {
+        name: 'Dr Test',
+        specialization: 'Cardiology',
+        experience: 5,
+        email: 'doctor@example.com',
+        password: 'Doctor123!',
+        services: [{ serviceId: ids.service, price: '3500', duration: '45' }],
+        availabilityMode: 'custom',
+        availabilitySchedule: [{ date: '2099-04-10', timeSlots: ['09:00', '10:00'] }],
+      },
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await createDoctor(req, res, next);
+
+    expect(Doctor.create).toHaveBeenCalledWith(expect.objectContaining({
+      services: [{
+        serviceId: ids.service,
+        price: 3500,
+        duration: 45,
+        availabilityStatus: true,
+      }],
+    }));
   });
 });

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, Alert, Switch,
   ScrollView, TouchableOpacity, Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { createDoctorApi, updateDoctorApi } from '../../api/doctorApi';
+import { createDoctorApi, getDoctorsApi, updateDoctorApi } from '../../api/doctorApi';
+import { createServiceApi, getServicesApi } from '../../api/serviceApi';
 import { uploadDoctorImageApi } from '../../api/uploadApi';
 import { validateEmail, validateStrongPassword } from '../../utils/validators';
 import CustomInput from '../../components/CustomInput';
@@ -13,13 +14,39 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import ScreenHeader from '../../components/ScreenHeader';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
+const OTHER_SECTION = 'Other';
+
+const formatManualSpecialization = (value) => {
+  const trimmedStart = String(value || '').replace(/^\s+/, '');
+  if (!trimmedStart) return '';
+  return trimmedStart.charAt(0).toUpperCase() + trimmedStart.slice(1);
+};
+
 const DoctorFormScreen = ({ route, navigation }) => {
   const { doctor } = route.params || {};
   const [name, setName] = useState(doctor?.name || '');
   const [specialization, setSpecialization] = useState(doctor?.specialization || '');
+  const [manualSpecialization, setManualSpecialization] = useState('');
+  const [useOtherSpecialization, setUseOtherSpecialization] = useState(false);
+  const [existingSpecializations, setExistingSpecializations] = useState([]);
+  const [serviceOptions, setServiceOptions] = useState([]);
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceDescription, setNewServiceDescription] = useState('');
+  const [newServicePrice, setNewServicePrice] = useState('');
+  const [newServiceDuration, setNewServiceDuration] = useState('');
+  const [addingService, setAddingService] = useState(false);
+  const [doctorServices, setDoctorServices] = useState(() => (
+    Array.isArray(doctor?.services)
+      ? doctor.services.map((item) => ({
+        serviceId: item.serviceId?._id || item.serviceId,
+        price: item.price?.toString() || '',
+        duration: item.duration?.toString() || '',
+        availabilityStatus: item.availabilityStatus !== false,
+      }))
+      : []
+  ));
   const [experience, setExperience] = useState(doctor?.experience?.toString() || '');
   const [description, setDescription] = useState(doctor?.description || '');
-  const [consultationFee, setConsultationFee] = useState(doctor?.consultationFee?.toString() || '');
   const [email, setEmail] = useState(doctor?.userId?.email || '');
   const [password, setPassword] = useState('');
   const [imageUri, setImageUri] = useState(doctor?.image || '');
@@ -28,6 +55,33 @@ const DoctorFormScreen = ({ route, navigation }) => {
     doctor?.availabilityStatus !== undefined ? Boolean(doctor.availabilityStatus) : true
   );
   const [loading, setLoading] = useState(false);
+
+  const sectionOptions = useMemo(() => {
+    const values = [...existingSpecializations];
+    if (doctor?.specialization && !values.includes(doctor.specialization)) {
+      values.unshift(doctor.specialization);
+    }
+    return values;
+  }, [doctor?.specialization, existingSpecializations]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [doctorResponse, serviceResponse] = await Promise.all([getDoctorsApi(), getServicesApi()]);
+        const doctorData = Array.isArray(doctorResponse.data) ? doctorResponse.data : doctorResponse.data?.data;
+        const sections = Array.isArray(doctorData)
+          ? doctorData
+            .map((item) => String(item.specialization || '').trim())
+            .filter(Boolean)
+          : [];
+        setExistingSpecializations(Array.from(new Set(sections)).sort((a, b) => a.localeCompare(b)));
+        const services = Array.isArray(serviceResponse.data) ? serviceResponse.data : serviceResponse.data?.data;
+        setServiceOptions(Array.isArray(services) ? services.filter((item) => item.availabilityStatus !== false) : []);
+      } catch (error) {
+        console.log('Failed to load doctor form options:', error.response?.data?.message || error.message);
+      }
+    })();
+  }, []);
 
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -73,8 +127,101 @@ const DoctorFormScreen = ({ route, navigation }) => {
     await uploadDoctorImageApi(formData);
   };
 
+  const handleManualSpecializationChange = (value) => {
+    setManualSpecialization(formatManualSpecialization(value));
+  };
+
+  const selectSection = (section) => {
+    if (section === OTHER_SECTION) {
+      setUseOtherSpecialization(true);
+      setSpecialization('');
+      return;
+    }
+
+    setUseOtherSpecialization(false);
+    setSpecialization(section);
+    setManualSpecialization('');
+  };
+
+  const isDoctorServiceSelected = (serviceId) => doctorServices.some((item) => item.serviceId === serviceId);
+
+  const toggleDoctorService = (service) => {
+    setDoctorServices((prev) => {
+      if (prev.some((item) => item.serviceId === service._id)) {
+        return prev.filter((item) => item.serviceId !== service._id);
+      }
+
+      return [
+        ...prev,
+        {
+          serviceId: service._id,
+          price: service.price?.toString() || '',
+          duration: service.duration?.toString() || '',
+          availabilityStatus: true,
+        },
+      ];
+    });
+  };
+
+  const updateDoctorService = (serviceId, field, value) => {
+    setDoctorServices((prev) =>
+      prev.map((item) => (item.serviceId === serviceId ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const handleAddNewService = async () => {
+    const price = Number(newServicePrice);
+    const duration = Number(newServiceDuration);
+
+    if (!newServiceName.trim() || !newServiceDescription.trim()) {
+      Alert.alert('Error', 'Please enter the new service name and description');
+      return;
+    }
+
+    if (Number.isNaN(price) || price <= 0 || !Number.isInteger(duration) || duration <= 0) {
+      Alert.alert('Error', 'Please enter a valid service price and duration');
+      return;
+    }
+
+    setAddingService(true);
+    try {
+      const response = await createServiceApi({
+        serviceName: newServiceName.trim(),
+        description: newServiceDescription.trim(),
+        price,
+        duration,
+        availabilityStatus: true,
+      });
+      const savedService = response.data?.data || response.data;
+
+      setServiceOptions((prev) => [...prev, savedService]);
+      setDoctorServices((prev) => [
+        ...prev.filter((item) => item.serviceId !== savedService._id),
+        {
+          serviceId: savedService._id,
+          price: String(price),
+          duration: String(duration),
+          availabilityStatus: true,
+        },
+      ]);
+      setNewServiceName('');
+      setNewServiceDescription('');
+      setNewServicePrice('');
+      setNewServiceDuration('');
+      Alert.alert('Service Added', 'The new service was added and selected for this doctor.');
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.message || 'Failed to add service');
+    } finally {
+      setAddingService(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!name || !specialization || experience === '') { Alert.alert('Error', 'Please fill required fields'); return; }
+    const finalSpecialization = useOtherSpecialization
+      ? formatManualSpecialization(manualSpecialization).trim()
+      : specialization.trim();
+
+    if (!name || !finalSpecialization || experience === '') { Alert.alert('Error', 'Please fill required fields'); return; }
     if (!doctor && (!email.trim() || !password.trim())) {
       Alert.alert('Error', 'Please add a unique email and password for the doctor login');
       return;
@@ -89,16 +236,38 @@ const DoctorFormScreen = ({ route, navigation }) => {
     }
     const exp = parseInt(experience);
     if (Number.isNaN(exp) || exp < 0) { Alert.alert('Error', 'Experience must be a valid number'); return; }
+    if (doctorServices.length === 0) {
+      Alert.alert('Error', 'Please select at least one service this doctor provides');
+      return;
+    }
+
+    const normalizedServices = doctorServices.map((item) => ({
+      serviceId: item.serviceId,
+      price: Number(item.price),
+      duration: Number(item.duration),
+      availabilityStatus: item.availabilityStatus !== false,
+    }));
+    const invalidService = normalizedServices.find((item) =>
+      !item.serviceId
+      || Number.isNaN(item.price)
+      || item.price <= 0
+      || !Number.isInteger(item.duration)
+      || item.duration <= 0
+    );
+    if (invalidService) {
+      Alert.alert('Error', 'Please enter a valid price and duration for every selected doctor service');
+      return;
+    }
 
     setLoading(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const data = {
         name,
-        specialization,
+        specialization: finalSpecialization,
         experience: exp,
         description,
-        consultationFee: consultationFee ? parseFloat(consultationFee) : undefined,
+        services: normalizedServices,
         availabilityStatus,
       };
       if (!doctor || normalizedEmail) data.email = normalizedEmail;
@@ -148,10 +317,134 @@ const DoctorFormScreen = ({ route, navigation }) => {
             </View>
           </TouchableOpacity>
           <CustomInput label="Full Name" value={name} onChangeText={setName} placeholder="Dr. Full Name" />
-          <CustomInput label="Specialization" value={specialization} onChangeText={setSpecialization} placeholder="e.g. Cardiologist" />
+          <Text style={styles.inputLabel}>Specialized Section</Text>
+          <View style={styles.sectionPicker}>
+            {sectionOptions.map((section) => {
+              const selected = !useOtherSpecialization && specialization === section;
+              return (
+                <TouchableOpacity
+                  key={section}
+                  style={[styles.sectionChip, selected && styles.sectionChipSelected]}
+                  onPress={() => selectSection(section)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.sectionChipText, selected && styles.sectionChipTextSelected]}>
+                    {section}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={[styles.sectionChip, useOtherSpecialization && styles.sectionChipSelected]}
+              onPress={() => selectSection(OTHER_SECTION)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.sectionChipText, useOtherSpecialization && styles.sectionChipTextSelected]}>
+                Other
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {useOtherSpecialization ? (
+            <CustomInput
+              label="New Section"
+              value={manualSpecialization}
+              onChangeText={handleManualSpecializationChange}
+              placeholder="e.g. Neurology"
+            />
+          ) : null}
           <CustomInput label="Experience (yrs)" value={experience} onChangeText={setExperience} placeholder="e.g. 5" keyboardType="numeric" />
-          <CustomInput label="Consultation Fee (LKR)" value={consultationFee} onChangeText={setConsultationFee} placeholder="e.g. 2500" keyboardType="numeric" />
           <CustomInput label="Description" value={description} onChangeText={setDescription} placeholder="Brief bio..." multiline numberOfLines={4} />
+        </View>
+
+        <Text style={styles.sectionLabel}>DOCTOR SERVICES</Text>
+        <View style={styles.formCard}>
+          <View style={styles.newServiceBox}>
+            <Text style={styles.newServiceTitle}>Add New Service</Text>
+            <Text style={styles.newServiceSub}>Use this when the service is not in the list below.</Text>
+            <CustomInput
+              label="Service Name"
+              value={newServiceName}
+              onChangeText={setNewServiceName}
+              placeholder="e.g. Skin Consultation"
+            />
+            <CustomInput
+              label="Description"
+              value={newServiceDescription}
+              onChangeText={setNewServiceDescription}
+              placeholder="Describe what this service includes..."
+              multiline
+              numberOfLines={3}
+            />
+            <CustomInput
+              label="Price (LKR)"
+              value={newServicePrice}
+              onChangeText={setNewServicePrice}
+              placeholder="e.g. 2500"
+              keyboardType="numeric"
+            />
+            <CustomInput
+              label="Duration (minutes)"
+              value={newServiceDuration}
+              onChangeText={setNewServiceDuration}
+              placeholder="e.g. 30"
+              keyboardType="numeric"
+            />
+            <CustomButton
+              title={addingService ? 'Adding Service...' : 'Add Service'}
+              onPress={handleAddNewService}
+              disabled={addingService}
+              variant="outline"
+              style={styles.addServiceBtn}
+            />
+          </View>
+
+          {serviceOptions.length === 0 ? (
+            <Text style={styles.emptyText}>Create hospital services first, then assign them to doctors here.</Text>
+          ) : (
+            serviceOptions.map((service) => {
+              const selected = isDoctorServiceSelected(service._id);
+              const selectedService = doctorServices.find((item) => item.serviceId === service._id);
+              return (
+                <View key={service._id} style={styles.doctorServiceItem}>
+                  <TouchableOpacity
+                    style={[styles.serviceToggle, selected && styles.serviceToggleSelected]}
+                    onPress={() => toggleDoctorService(service)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.serviceCheck, selected && styles.serviceCheckSelected]}>
+                      {selected ? <Text style={styles.serviceCheckText}>Y</Text> : null}
+                    </View>
+                    <View style={styles.serviceToggleText}>
+                      <Text style={[styles.serviceToggleName, selected && styles.serviceToggleNameSelected]}>
+                        {service.serviceName}
+                      </Text>
+                      <Text style={styles.serviceToggleMeta}>
+                        Default LKR {Number(service.price || 0).toLocaleString()} - {service.duration || 0} min
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  {selected ? (
+                    <View style={styles.serviceInputs}>
+                      <CustomInput
+                        label="Doctor Price (LKR)"
+                        value={selectedService?.price || ''}
+                        onChangeText={(value) => updateDoctorService(service._id, 'price', value)}
+                        placeholder="e.g. 2500"
+                        keyboardType="numeric"
+                      />
+                      <CustomInput
+                        label="Duration (minutes)"
+                        value={selectedService?.duration || ''}
+                        onChangeText={(value) => updateDoctorService(service._id, 'duration', value)}
+                        placeholder="e.g. 30"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })
+          )}
         </View>
 
         <Text style={styles.sectionLabel}>DOCTOR LOGIN</Text>
@@ -244,6 +537,288 @@ const styles = StyleSheet.create({
   imageTextWrap: { flex: 1, marginLeft: 14 },
   imageTitle: { fontSize: 14, fontWeight: FONTS.bold, color: COLORS.navyDeep },
   imageSub: { fontSize: 11, color: COLORS.textMuted, marginTop: 3 },
+  inputLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: FONTS.semibold,
+    marginBottom: 8,
+  },
+  sectionPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  sectionChip: {
+    minHeight: 36,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.bgPage,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  sectionChipSelected: {
+    backgroundColor: COLORS.tealStrong,
+    borderColor: COLORS.tealStrong,
+  },
+  sectionChipText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: FONTS.semibold,
+  },
+  sectionChipTextSelected: {
+    color: COLORS.white,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    lineHeight: 20,
+  },
+  newServiceBox: {
+    backgroundColor: COLORS.bgPage,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    marginBottom: 16,
+  },
+  newServiceTitle: {
+    fontSize: 14,
+    fontWeight: FONTS.bold,
+    color: COLORS.navyDeep,
+  },
+  newServiceSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 3,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  addServiceBtn: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  doctorServiceItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  serviceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    backgroundColor: COLORS.bgPage,
+  },
+  serviceToggleSelected: {
+    borderColor: COLORS.tealStrong,
+    backgroundColor: COLORS.tealFaint,
+  },
+  serviceCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: COLORS.tealPale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  serviceCheckSelected: {
+    backgroundColor: COLORS.tealStrong,
+    borderColor: COLORS.tealStrong,
+  },
+  serviceCheckText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: FONTS.bold,
+  },
+  serviceToggleText: {
+    flex: 1,
+  },
+  serviceToggleName: {
+    fontSize: 14,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.semibold,
+  },
+  serviceToggleNameSelected: {
+    color: COLORS.tealStrong,
+  },
+  serviceToggleMeta: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 3,
+  },
+  serviceInputs: {
+    marginTop: 10,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  modeBtn: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bgPage,
+    marginRight: 8,
+  },
+  modeBtnSelected: {
+    backgroundColor: COLORS.tealStrong,
+    borderColor: COLORS.tealStrong,
+  },
+  modeBtnText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: FONTS.semibold,
+  },
+  modeBtnTextSelected: {
+    color: COLORS.white,
+  },
+  scheduleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.bgPage,
+    borderRadius: RADIUS.md,
+    padding: 12,
+    marginTop: 8,
+  },
+  scheduleTextWrap: {
+    flex: 1,
+  },
+  scheduleDate: {
+    fontSize: 13,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.bold,
+  },
+  scheduleSlots: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 3,
+  },
+  dateSelectRow: {
+    minHeight: 46,
+    borderWidth: 1.5,
+    borderColor: COLORS.inputBorder || COLORS.divider,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  dateSelectText: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.medium,
+  },
+  dateSelectPlaceholder: {
+    color: COLORS.textPlaceholder || COLORS.textMuted,
+  },
+  dateSelectArrow: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: FONTS.bold,
+  },
+  calendarBox: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: RADIUS.md,
+    padding: 10,
+    marginBottom: 12,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  calendarTitle: {
+    fontSize: 15,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.bold,
+  },
+  calendarNavBtn: {
+    width: 34,
+    height: 30,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.bgMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarNavBtnDisabled: {
+    opacity: 0.35,
+  },
+  calendarNavText: {
+    color: COLORS.navyDeep,
+    fontSize: 16,
+    fontWeight: FONTS.bold,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  weekDay: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: FONTS.bold,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDayBlank: {
+    width: `${100 / 7}%`,
+    height: 38,
+  },
+  calendarDay: {
+    width: `${100 / 7}%`,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.md,
+  },
+  calendarDaySelected: {
+    backgroundColor: COLORS.tealStrong,
+  },
+  calendarDayDisabled: {
+    opacity: 0.3,
+  },
+  calendarDayText: {
+    fontSize: 13,
+    color: COLORS.navyDeep,
+    fontWeight: FONTS.semibold,
+  },
+  calendarDayTextSelected: {
+    color: COLORS.white,
+  },
+  calendarDayTextDisabled: {
+    color: COLORS.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  removeScheduleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  removeScheduleText: {
+    fontSize: 12,
+    color: COLORS.danger,
+    fontWeight: FONTS.bold,
+  },
   toggleCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,

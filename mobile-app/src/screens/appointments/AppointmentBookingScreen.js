@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Alert,
   TouchableOpacity, ScrollView,
 } from 'react-native';
-import { createAppointmentApi } from '../../api/appointmentApi';
-import { getServicesApi } from '../../api/serviceApi';
+import { createAppointmentApi, getDoctorBookedSlotsApi } from '../../api/appointmentApi';
 import CustomInput from '../../components/CustomInput';
 import CustomButton from '../../components/CustomButton';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -13,7 +12,17 @@ import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
 const getTodayDate = () => {
   const today = new Date();
-  return today.toISOString().split('T')[0];
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toDateValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const getUpcomingDates = (days = 14) => {
@@ -26,7 +35,7 @@ const getUpcomingDates = (days = 14) => {
     const dayName = current.toLocaleDateString('en-US', { weekday: 'short' });
     const monthName = current.toLocaleDateString('en-US', { month: 'short' });
     dates.push({
-      value: current.toISOString().split('T')[0],
+      value: toDateValue(current),
       day: dayName,
       dayNumber: current.getDate(),
       month: monthName,
@@ -36,36 +45,124 @@ const getUpcomingDates = (days = 14) => {
   return dates;
 };
 
+const getDoctorSlotsForDate = (doctor, dateValue) => {
+  if (doctor?.availabilityMode === 'daily') {
+    return Array.isArray(doctor?.dailyTimeSlots) ? doctor.dailyTimeSlots : [];
+  }
+
+  const schedule = Array.isArray(doctor?.availabilitySchedule) ? doctor.availabilitySchedule : [];
+  return schedule.find((item) => item.date === dateValue)?.timeSlots || [];
+};
+
+const getDoctorAvailableDates = (doctor) => {
+  if (doctor?.availabilityMode === 'daily') return getUpcomingDates(14);
+
+  const today = getTodayDate();
+  const schedule = Array.isArray(doctor?.availabilitySchedule) ? doctor.availabilitySchedule : [];
+  return schedule
+    .filter((item) => item.date >= today && Array.isArray(item.timeSlots) && item.timeSlots.length > 0)
+    .map((item) => {
+      const date = new Date(`${item.date}T00:00:00`);
+      return {
+        value: item.date,
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayNumber: date.getDate(),
+        month: date.toLocaleDateString('en-US', { month: 'short' }),
+      };
+    });
+};
+
 const formatLkr = (value) => (
   value !== undefined && value !== null
     ? `LKR ${Number(value).toLocaleString()}`
     : 'LKR 0'
 );
 
+const isPastTimeSlot = (dateValue, timeValue) => {
+  if (dateValue !== getTodayDate()) return false;
+  const [hours, minutes] = timeValue.split(':').map(Number);
+  const slotDate = new Date();
+  slotDate.setHours(hours, minutes, 0, 0);
+  return slotDate < new Date();
+};
+
 const AppointmentBookingScreen = ({ route, navigation }) => {
-  const { doctor } = route.params;
+  const { doctor, initialDate, initialTime } = route.params;
   const [services, setServices] = useState([]);
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [appointmentDate, setAppointmentDate] = useState(getTodayDate());
-  const [appointmentTime, setAppointmentTime] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState(initialDate || getTodayDate());
+  const [appointmentTime, setAppointmentTime] = useState(initialTime || '');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
-  const availableDates = getUpcomingDates(14);
-  const availableTimeSlots = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
-  ];
+  const availableDates = useMemo(() => getDoctorAvailableDates(doctor), [doctor]);
+  const availableTimeSlots = useMemo(() => getDoctorSlotsForDate(doctor, appointmentDate), [appointmentDate, doctor]);
 
   useEffect(() => {
+    if (availableDates.length > 0 && !availableDates.some((date) => date.value === appointmentDate)) {
+      setAppointmentDate(availableDates[0].value);
+    }
+  }, [appointmentDate, availableDates]);
+
+  useEffect(() => {
+    const offeredServices = Array.isArray(doctor?.services)
+      ? doctor.services
+        .filter((item) => item.availabilityStatus !== false && item.serviceId)
+        .map((item) => ({
+          ...(typeof item.serviceId === 'object' ? item.serviceId : { _id: item.serviceId }),
+          _id: item.serviceId?._id || item.serviceId,
+          serviceName: item.serviceId?.serviceName || 'Doctor Service',
+          description: item.serviceId?.description || '',
+          price: item.price,
+          duration: item.duration,
+          availabilityStatus: item.availabilityStatus,
+        }))
+      : [];
+
+    setServices(offeredServices);
+    setSelectedServiceId('');
+  }, [doctor?.services]);
+
+  useEffect(() => {
+    if (!doctor?._id || !appointmentDate) return;
+
+    let active = true;
+    setSlotsLoading(true);
     (async () => {
       try {
-        const res = await getServicesApi();
-        setServices(Array.isArray(res.data) ? res.data : []);
-      } catch (e) { console.error(e); }
+        const res = await getDoctorBookedSlotsApi(doctor._id, appointmentDate);
+        const slots = Array.isArray(res.data?.bookedSlots) ? res.data.bookedSlots : [];
+        if (!active) return;
+        setBookedSlots(slots);
+      } catch (error) {
+        if (active) {
+          setBookedSlots([]);
+          Alert.alert('Error', error.response?.data?.message || 'Failed to load booked slots');
+        }
+      } finally {
+        if (active) setSlotsLoading(false);
+      }
     })();
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [appointmentDate, doctor?._id]);
+
+  useEffect(() => {
+    if (
+      appointmentTime
+      && (
+        bookedSlots.includes(appointmentTime)
+        || isPastTimeSlot(appointmentDate, appointmentTime)
+        || !availableTimeSlots.includes(appointmentTime)
+      )
+    ) {
+      setAppointmentTime('');
+    }
+  }, [appointmentDate, appointmentTime, availableTimeSlots, bookedSlots]);
 
   const isValidDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d));
   const isValidTime = (t) => /^\d{2}:\d{2}$/.test(String(t));
@@ -75,6 +172,7 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
     if (!selectedServiceId || !appointmentDate || !appointmentTime) { Alert.alert('Error', 'Please fill all required fields'); return; }
     if (!isValidDate(appointmentDate)) { Alert.alert('Error', 'Date must be YYYY-MM-DD'); return; }
     if (!isValidTime(appointmentTime)) { Alert.alert('Error', 'Time must be HH:MM'); return; }
+    if (isPastTimeSlot(appointmentDate, appointmentTime)) { Alert.alert('Error', 'Please select a current or upcoming time slot'); return; }
 
     setLoading(true);
     try {
@@ -121,14 +219,14 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
           <View style={styles.doctorText}>
             <Text style={styles.doctorName}>{doctor.name}</Text>
             <Text style={styles.doctorSpec}>{doctor.specialization}</Text>
-            <Text style={styles.doctorFee}>{formatLkr(doctor.consultationFee)} consultation</Text>
+            <Text style={styles.doctorFee}>{services.length} services available</Text>
           </View>
         </View>
 
         {/* Service selection */}
         <Text style={styles.sectionLabel}>SELECT SERVICE</Text>
         {services.length === 0 ? (
-          <Text style={styles.noServices}>No services available</Text>
+          <Text style={styles.noServices}>This doctor has no services available for booking</Text>
         ) : (
           services.map((item) => (
             <TouchableOpacity
@@ -157,37 +255,52 @@ const AppointmentBookingScreen = ({ route, navigation }) => {
 
         <Text style={styles.sectionLabel}>CHOOSE DATE</Text>
         <View style={styles.calendarCard}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarRow}>
-            {availableDates.map((date) => {
-              const selected = date.value === appointmentDate;
-              return (
-                <TouchableOpacity
-                  key={date.value}
-                  style={[styles.dateItem, selected && styles.dateItemSelected]}
-                  onPress={() => setAppointmentDate(date.value)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.dateDay, selected && styles.dateDaySelected]}>{date.day}</Text>
-                  <Text style={[styles.dateNumber, selected && styles.dateNumberSelected]}>{date.dayNumber}</Text>
-                  <Text style={[styles.dateMonth, selected && styles.dateMonthSelected]}>{date.month}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {availableDates.length === 0 ? (
+            <Text style={styles.noServices}>This doctor has no available dates.</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarRow}>
+              {availableDates.map((date) => {
+                const selected = date.value === appointmentDate;
+                return (
+                  <TouchableOpacity
+                    key={date.value}
+                    style={[styles.dateItem, selected && styles.dateItemSelected]}
+                    onPress={() => setAppointmentDate(date.value)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.dateDay, selected && styles.dateDaySelected]}>{date.day}</Text>
+                    <Text style={[styles.dateNumber, selected && styles.dateNumberSelected]}>{date.dayNumber}</Text>
+                    <Text style={[styles.dateMonth, selected && styles.dateMonthSelected]}>{date.month}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
 
         <Text style={styles.sectionLabel}>SELECT TIME SLOT</Text>
+        {slotsLoading ? <Text style={styles.slotHint}>Checking booked slots...</Text> : null}
         <View style={styles.slotCard}>
-          {availableTimeSlots.map((slot) => {
+          {availableTimeSlots.length === 0 ? (
+            <Text style={styles.noServices}>No time slots configured for this date.</Text>
+          ) : availableTimeSlots.map((slot) => {
             const selected = slot === appointmentTime;
+            const booked = bookedSlots.includes(slot);
+            const past = isPastTimeSlot(appointmentDate, slot);
+            const disabled = booked || past;
             return (
               <TouchableOpacity
                 key={slot}
-                style={[styles.slotItem, selected && styles.slotItemSelected]}
+                style={[styles.slotItem, selected && styles.slotItemSelected, disabled && styles.slotItemBooked]}
                 onPress={() => setAppointmentTime(slot)}
+                disabled={disabled}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.slotText, selected && styles.slotTextSelected]}>{slot}</Text>
+                <Text style={[styles.slotText, selected && styles.slotTextSelected, disabled && styles.slotTextBooked]}>
+                  {slot}
+                </Text>
+                {booked ? <Text style={styles.bookedLabel}>Booked</Text> : null}
+                {!booked && past ? <Text style={styles.bookedLabel}>Past</Text> : null}
               </TouchableOpacity>
             );
           })}
@@ -296,8 +409,32 @@ const styles = StyleSheet.create({
   slotItemSelected: {
     backgroundColor: COLORS.tealStrong,
   },
+  slotItemBooked: {
+    backgroundColor: COLORS.bgMuted,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    opacity: 0.55,
+  },
   slotText: { color: COLORS.textPrimary, fontWeight: FONTS.medium },
   slotTextSelected: { color: COLORS.white },
+  slotTextBooked: {
+    color: COLORS.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  bookedLabel: {
+    fontSize: 9,
+    color: COLORS.danger,
+    fontWeight: FONTS.bold,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  slotHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginLeft: 4,
+    marginBottom: 8,
+    fontWeight: FONTS.medium,
+  },
 
   formCard: {
     backgroundColor: COLORS.white, borderRadius: RADIUS.lg,
