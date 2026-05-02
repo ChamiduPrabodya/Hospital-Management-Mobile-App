@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Hospital Management",
+    "slug": "hospital-management-mobile-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android"],
+    "assetBundlePatterns": ["**/*"]
+  }
+}

@@ -2,6 +2,7 @@ const express = require('express');
 const {
   createAppointment,
   getAppointments,
+  getDoctorBookedSlots,
   getAppointmentById,
   updateAppointment,
   deleteAppointment,
@@ -15,6 +16,7 @@ const router = express.Router();
 router.use(protect);
 router.get('/', getAppointments);
 router.post('/', createAppointment);
+router.get('/doctor/:doctorId/booked-slots', getDoctorBookedSlots);
 router.get('/:id', getAppointmentById);
 router.put('/:id', updateAppointment);
 router.delete('/:id', deleteAppointment);

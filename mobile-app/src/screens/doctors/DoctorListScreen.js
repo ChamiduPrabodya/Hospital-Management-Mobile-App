@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useContext } from 'react';
 import {
   View, FlatList, StyleSheet, Alert, TouchableOpacity, Text,
-  Modal, Image, ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { deleteDoctorApi, getDoctorsApi, updateDoctorApi } from '../../api/doctorApi';
@@ -16,13 +15,8 @@ const DoctorListScreen = ({ navigation }) => {
   const [doctors, setDoctors]             = useState([]);
   const [loading, setLoading]             = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
-  const [selectedDoctor, setSelectedDoctor] = useState(null);
   const { userInfo } = useContext(AuthContext);
   const isAdmin = userInfo?.role === 'admin';
-  const getDoctorImage = useCallback(
-    (doctor) => doctor?.userId?.profileImage || doctor?.image || null,
-    []
-  );
 
   const loadDoctors = useCallback(async () => {
     setLoading(true);
@@ -70,13 +64,6 @@ const DoctorListScreen = ({ navigation }) => {
 
   if (loading && doctors.length === 0) return <LoadingSpinner message="Loading doctors..." />;
 
-  const closeDoctorPopup = () => setSelectedDoctor(null);
-  const openBooking = () => {
-    const doctor = selectedDoctor;
-    closeDoctorPopup();
-    navigation.navigate('AppointmentBooking', { doctor });
-  };
-
   return (
     <View style={styles.root}>
       <ScreenHeader
@@ -107,13 +94,7 @@ const DoctorListScreen = ({ navigation }) => {
           <View>
             <DoctorCard
               doctor={item}
-              onPress={() => {
-                if (isAdmin) {
-                  navigation.navigate('DoctorDetails', { doctor: item });
-                } else {
-                  setSelectedDoctor(item);
-                }
-              }}
+              onPress={() => navigation.navigate('DoctorDetails', { doctor: item })}
             />
             {isAdmin ? (
               <View style={styles.adminRow}>
@@ -168,85 +149,6 @@ const DoctorListScreen = ({ navigation }) => {
         )}
       />
 
-      <Modal
-        visible={Boolean(selectedDoctor)}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDoctorPopup}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <TouchableOpacity style={styles.closeBtn} onPress={closeDoctorPopup} activeOpacity={0.8}>
-              <Text style={styles.closeBtnText}>X</Text>
-            </TouchableOpacity>
-
-            {selectedDoctor ? (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
-                {getDoctorImage(selectedDoctor) ? (
-                  <Image source={{ uri: getDoctorImage(selectedDoctor) }} style={styles.doctorImage} resizeMode="cover" />
-                ) : (
-                  <View style={styles.imagePlaceholder}>
-                    <Text style={styles.imagePlaceholderText}>
-                      {selectedDoctor.name?.charAt(0)?.toUpperCase() || 'D'}
-                    </Text>
-                  </View>
-                )}
-
-                <Text style={styles.modalName}>{selectedDoctor.name || 'Doctor name'}</Text>
-                <Text style={styles.modalSpec}>{selectedDoctor.specialization || 'Medical Specialist'}</Text>
-
-                <View style={[
-                  styles.modalAvailability,
-                  { backgroundColor: selectedDoctor.availabilityStatus ? COLORS.successBg : COLORS.dangerBg },
-                ]}>
-                  <Text style={[
-                    styles.modalAvailabilityText,
-                    { color: selectedDoctor.availabilityStatus ? COLORS.success : COLORS.danger },
-                  ]}>
-                    {selectedDoctor.availabilityStatus ? 'Available for appointments' : 'Not currently available'}
-                  </Text>
-                </View>
-
-                <View style={styles.infoGrid}>
-                  <View style={styles.infoTile}>
-                    <Text style={styles.infoLabel}>Experience</Text>
-                    <Text style={styles.infoValue}>{selectedDoctor.experience ?? 'N/A'} yrs</Text>
-                  </View>
-                  <View style={styles.infoTile}>
-                    <Text style={styles.infoLabel}>Fee</Text>
-                    <Text style={styles.infoValue}>
-                      {selectedDoctor.consultationFee !== undefined && selectedDoctor.consultationFee !== null
-                        ? `LKR ${Number(selectedDoctor.consultationFee).toLocaleString()}`
-                        : 'N/A'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.aboutBox}>
-                  <Text style={styles.aboutTitle}>About</Text>
-                  <Text style={styles.aboutText}>
-                    {selectedDoctor.description || 'No additional information is available for this doctor yet.'}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.bookBtn,
-                    !selectedDoctor.availabilityStatus && styles.bookBtnDisabled,
-                  ]}
-                  onPress={openBooking}
-                  disabled={!selectedDoctor.availabilityStatus}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.bookBtnText}>
-                    {selectedDoctor.availabilityStatus ? 'Book Appointment' : 'Unavailable'}
-                  </Text>
-                </TouchableOpacity>
-              </ScrollView>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };

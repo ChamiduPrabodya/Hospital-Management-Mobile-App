@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import CustomButton from '../../components/CustomButton';
+import { AuthContext } from '../../context/AuthContext';
 
 const DoctorDetailsScreen = ({ route, navigation }) => {
   const { doctor } = route.params;
+  const { userInfo } = useContext(AuthContext);
+  const isPatient = userInfo?.role === 'patient';
   const imageUri = doctor?.userId?.profileImage || doctor?.image;
-  const consultationFee = doctor?.consultationFee !== undefined && doctor?.consultationFee !== null
-    ? `LKR ${Number(doctor.consultationFee).toLocaleString()}`
-    : 'N/A';
+  const serviceCount = Array.isArray(doctor?.services)
+    ? doctor.services.filter((item) => item.availabilityStatus !== false).length
+    : 0;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -27,8 +30,8 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
             <Text style={styles.infoValue}>{doctor?.experience ?? 'N/A'} yrs</Text>
           </View>
           <View style={styles.infoBlock}>
-            <Text style={styles.infoLabel}>Consultation Fee</Text>
-            <Text style={styles.infoValue}>{consultationFee}</Text>
+            <Text style={styles.infoLabel}>Services</Text>
+            <Text style={styles.infoValue}>{serviceCount} available</Text>
           </View>
         </View>
         <View style={[styles.badge, { backgroundColor: doctor?.availabilityStatus ? '#dcfce7' : '#fee2e2' }]}>
@@ -45,10 +48,13 @@ const DoctorDetailsScreen = ({ route, navigation }) => {
         </Text>
       </View>
 
-      <CustomButton
-        title="Book Appointment"
-        onPress={() => navigation.navigate('AppointmentBooking', { doctor })}
-      />
+      {isPatient ? (
+        <CustomButton
+          title={doctor?.availabilityStatus ? 'Book Appointment' : 'Doctor Unavailable'}
+          onPress={() => navigation.navigate('AppointmentBooking', { doctor })}
+          disabled={!doctor?.availabilityStatus}
+        />
+      ) : null}
     </ScrollView>
   );
 };

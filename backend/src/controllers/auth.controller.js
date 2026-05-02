@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/user.model');
+const ensureDemoAuthData = require('../bootstrap/ensureDemoAuthData');
 const generateToken = require('../utils/generateToken');
 const asyncHandler = require('../utils/asyncHandler');
 const {
@@ -15,6 +16,7 @@ const {
 const isValidOtp = (otp) => /^\d{6}$/.test(String(otp));
 const OTP_EXPIRY_MINUTES = 10;
 const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest('hex');
+<<<<<<< HEAD
 const isInactive = (user) => user && user.isActive === false;
 const buildDeactivatedLoginMessage = (user) => {
   const reason = String(user?.deactivationReason || '').trim();
@@ -26,6 +28,30 @@ const buildDeactivatedLoginMessage = (user) => {
     ? `${baseMessage}. You can register again with this email.`
     : `${baseMessage}. Please contact an admin if you need access again.`;
 };
+=======
+const getDemoEmails = () =>
+  new Set([
+    String(process.env.ADMIN_EMAIL || 'admin@example.com').trim().toLowerCase(),
+    'patient@example.com',
+    String(process.env.DOCTOR_EMAIL || 'doctor@example.com').trim().toLowerCase(),
+  ]);
+const getDemoCredentials = () =>
+  new Map([
+    [
+      String(process.env.ADMIN_EMAIL || 'admin@example.com').trim().toLowerCase(),
+      String(process.env.ADMIN_PASSWORD || 'admin123').trim(),
+    ],
+    ['patient@example.com', 'patient123'],
+    [
+      String(process.env.DOCTOR_EMAIL || 'doctor@example.com').trim().toLowerCase(),
+      String(process.env.DOCTOR_PASSWORD || 'doctor123').trim(),
+    ],
+  ]);
+const shouldBootstrapDemoUser = (email) =>
+  process.env.NODE_ENV !== 'production' &&
+  process.env.AUTO_BOOTSTRAP_DEMO_USERS !== 'false' &&
+  getDemoEmails().has(String(email || '').trim().toLowerCase());
+>>>>>>> 8ec15cbf1a805c262d50520bd7ec4d39f9327fac
 const buildAuthPayload = (user, token) => ({
   token,
   _id: user._id,
@@ -130,16 +156,44 @@ exports.loginUser = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Password must be at least 6 characters' });
   }
 
+<<<<<<< HEAD
   const user = await User.findOne({ email });
+=======
+  let user = await User.findOne({ email, isActive: { $ne: false } });
+
+  if (!user && shouldBootstrapDemoUser(email)) {
+    await ensureDemoAuthData();
+    user = await User.findOne({ email, isActive: { $ne: false } });
+  }
+
+>>>>>>> 8ec15cbf1a805c262d50520bd7ec4d39f9327fac
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
+<<<<<<< HEAD
   if (isInactive(user)) {
     return res.status(403).json({ message: buildDeactivatedLoginMessage(user) });
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
+=======
+  let isMatch = await bcrypt.compare(password, user.password);
+
+  if (!isMatch && shouldBootstrapDemoUser(email)) {
+    const demoPassword = getDemoCredentials().get(email);
+
+    if (demoPassword && password === demoPassword) {
+      await ensureDemoAuthData();
+      user = await User.findOne({ email, isActive: { $ne: false } });
+
+      if (user) {
+        isMatch = await bcrypt.compare(password, user.password);
+      }
+    }
+  }
+
+>>>>>>> 8ec15cbf1a805c262d50520bd7ec4d39f9327fac
   if (!isMatch) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }

@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const connectDB = require('../config/db');
 
 const Doctor = require('../models/doctor.model');
 const User = require('../models/user.model');
@@ -67,12 +68,7 @@ const printCounts = async () => {
 };
 
 const syncDoctorLogins = async () => {
-  if (!process.env.MONGO_URI) {
-    throw new Error('MONGO_URI is missing in backend/.env');
-  }
-
-  await mongoose.connect(process.env.MONGO_URI);
-  console.log('MongoDB connected');
+  await connectDB();
 
   await printCounts();
 

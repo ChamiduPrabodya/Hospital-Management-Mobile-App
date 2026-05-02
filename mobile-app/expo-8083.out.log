@@ -1,0 +1,21 @@
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+Starting project at C:\Users\DELL\Hospital-Management-Mobile-App\mobile-app
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8083
+Logs for your project will appear below.
+Android .\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android .\index.js ░░░░░░░░░░░░░░░░  1.0% (1/1)
+Android .\index.js ▓▓░░░░░░░░░░░░░░ 16.9% ( 40/177)
+Android .\index.js ▓▓░░░░░░░░░░░░░░ 16.9% (119/312)
+Android .\index.js ▓▓▓▓▓░░░░░░░░░░░ 33.4% (276/481)
+Android .\index.js ▓▓▓▓▓▓░░░░░░░░░░ 40.6% (382/633)
+Android .\index.js ▓▓▓▓▓▓▓░░░░░░░░░ 46.1% (502/739)
+Android .\index.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 57.6% (598/815)
+Android .\index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 66.1% (761/936)
+Android .\index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 73.1% ( 883/1041)
+Android .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 80.1% (1000/1117)
+Android .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 90.9% (1142/1219)
+Android .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 91.4% (1266/1327)
+Android Bundled 49738ms index.js (1371 modules)

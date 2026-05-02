@@ -10,7 +10,10 @@ const appointmentRoutes = require('./routes/appointment.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const complaintRoutes = require('./routes/complaint.routes');
 const reportRoutes = require('./routes/report.routes');
+const departmentRoutes = require('./routes/departmentRoutes');
+const fileRoutes = require('./routes/file.routes');
 const uploadRoutes = require('./routes/upload.routes');
+const medicalDocumentRoutes = require('./routes/medicalDocument.routes');
 
 const app = express();
 
@@ -26,7 +29,10 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/files', fileRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/medical-documents', medicalDocumentRoutes);
 
 app.get('/api/health', (req, res) => {
   res.status(200).json({ message: 'Hospital Management API is running' });

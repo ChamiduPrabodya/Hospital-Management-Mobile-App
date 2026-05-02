@@ -16,6 +16,8 @@ import {
   normalizePhone,
   normalizePassword,
 } from '../../utils/validators';
+import { BASE_URL } from '../../utils/constants';
+import { formatRequestErrorMessage } from '../../utils/requestError';
 import { COLORS, FONTS, RADIUS, SHADOW } from '../../theme';
 
 const RegisterScreen = ({ navigation }) => {
@@ -126,7 +128,13 @@ const RegisterScreen = ({ navigation }) => {
     try {
       await register(normalizedName, normalizedEmail, normalizedPhone, normalizedAddress, normalizedPassword);
     } catch (error) {
-      Alert.alert('Registration Failed', error.response?.data?.message || 'Please try again.');
+      const message = formatRequestErrorMessage(error, {
+        timeout: `Registration timed out while contacting ${BASE_URL}. Make sure the backend is running.`,
+        network: `Cannot reach the registration server at ${BASE_URL}. Make sure the backend is running and your device can reach this address.`,
+        default: 'Unable to create your account right now. Please try again.',
+      });
+
+      Alert.alert('Registration Failed', message);
     } finally {
       setLoading(false);
     }

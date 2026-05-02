@@ -1,0 +1,9 @@
+
+> mobile-app@1.0.0 start:tunnel
+> expo start --tunnel --clear
+
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+Starting project at C:\Users\DELL\Hospital-Management-Mobile-App\mobile-app
+› Port 8081 is being used by another process
+› Skipping dev server
