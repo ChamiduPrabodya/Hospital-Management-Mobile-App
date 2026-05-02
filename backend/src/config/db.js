@@ -2,6 +2,16 @@ const mongoose = require('mongoose');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const getTrimmedEnv = (name) => {
+  const value = process.env[name];
+
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim();
+};
+
 const connectWithRetry = async (
   uri,
   label,
@@ -33,44 +43,55 @@ const connectWithRetry = async (
   return false;
 };
 
-const getConnectionMode = () =>
-  (process.env.MONGO_URI_SOURCE || process.env.MONGO_TARGET || 'auto').trim().toLowerCase();
+const getConnectionMode = () => (getTrimmedEnv('MONGO_URI_SOURCE') || getTrimmedEnv('MONGO_TARGET') || 'auto').toLowerCase();
+
+const getMongoUris = (mode = getConnectionMode()) => {
+  const genericUri = getTrimmedEnv('MONGO_URI');
+  const atlasUri = getTrimmedEnv('MONGO_URI_ATLAS') || genericUri;
+  const localUri = getTrimmedEnv('MONGO_URI_LOCAL') || (mode === 'local' ? genericUri : '');
+
+  return {
+    atlasUri,
+    localUri,
+  };
+};
 
 const connectDB = async () => {
-  const primaryUri = process.env.MONGO_URI;
-  const fallbackUri = process.env.MONGO_URI_LOCAL;
   const mode = getConnectionMode();
+  const { atlasUri, localUri } = getMongoUris(mode);
 
   console.log(`MongoDB connection mode: ${mode}`);
 
-  if (!primaryUri && !fallbackUri) {
-    throw new Error('Missing MongoDB connection string. Set MONGO_URI or MONGO_URI_LOCAL.');
+  if (!atlasUri && !localUri) {
+    throw new Error(
+      'Missing MongoDB connection string. Set MONGO_URI_LOCAL for local MongoDB, or MONGO_URI / MONGO_URI_ATLAS for a remote database.'
+    );
   }
 
   if (mode === 'local') {
-    if (!fallbackUri) {
-      throw new Error('MONGO_URI_SOURCE=local requires MONGO_URI_LOCAL to be set.');
+    if (!localUri) {
+      throw new Error('MONGO_URI_SOURCE=local requires MONGO_URI_LOCAL (or MONGO_URI) to be set.');
     }
 
-    await connectWithRetry(fallbackUri, 'MONGO_URI_LOCAL', { retries: 2 });
+    await connectWithRetry(localUri, 'MONGO_URI_LOCAL', { retries: 2 });
     return;
   }
 
   if (mode === 'atlas') {
-    if (!primaryUri) {
-      throw new Error('MONGO_URI_SOURCE=atlas requires MONGO_URI to be set.');
+    if (!atlasUri) {
+      throw new Error('MONGO_URI_SOURCE=atlas requires MONGO_URI or MONGO_URI_ATLAS to be set.');
     }
 
-    await connectWithRetry(primaryUri, 'MONGO_URI', { retries: 5 });
+    await connectWithRetry(atlasUri, 'MONGO_URI', { retries: 5 });
     return;
   }
 
-  if (primaryUri) {
+  if (atlasUri) {
     try {
-      await connectWithRetry(primaryUri, 'MONGO_URI', { retries: 1 });
+      await connectWithRetry(atlasUri, 'MONGO_URI', { retries: 1 });
       return;
     } catch (err) {
-      if (!fallbackUri) {
+      if (!localUri) {
         console.error('MongoDB connection failed permanently');
         throw err;
       }
@@ -80,7 +101,7 @@ const connectDB = async () => {
   }
 
   try {
-    await connectWithRetry(fallbackUri, 'MONGO_URI_LOCAL', { retries: 2 });
+    await connectWithRetry(localUri, 'MONGO_URI_LOCAL', { retries: 2 });
   } catch (err) {
     console.error('MongoDB connection failed permanently');
     throw err;
@@ -88,3 +109,5 @@ const connectDB = async () => {
 };
 
 module.exports = connectDB;
+module.exports.getConnectionMode = getConnectionMode;
+module.exports.getMongoUris = getMongoUris;
