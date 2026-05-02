@@ -1,4 +1,4 @@
-const DEFAULT_API_PORT = 5001;
+const DEFAULT_API_PORT = 5000;
 const DEFAULT_API_PATH = '/api';
 
 export const stripTrailingSlash = (value) => String(value).replace(/\/+$/, '');

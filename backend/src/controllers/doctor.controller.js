@@ -142,7 +142,7 @@ exports.createDoctor = asyncHandler(async (req, res) => {
   const normalizedPassword = String(password || '').trim();
   const normalizedSpecialization = formatSpecialization(specialization);
 
-  if (!name || !normalizedSpecialization || experience === undefined || !departmentId || !normalizedEmail || !normalizedPassword) {
+  if (!name || !normalizedSpecialization || experience === undefined || !normalizedEmail || !normalizedPassword || !departmentId) {
     return res.status(400).json({ message: 'Name, specialization, department, experience, email, and password are required' });
   }
 
@@ -225,8 +225,8 @@ exports.getDoctorById = asyncHandler(async (req, res) => {
   if (!validateObjectIdParam(res, req.params.id, 'doctor ID')) return;
 
   const doctor = await Doctor.findOne({ _id: req.params.id, isActive: { $ne: false } })
-    .populate('departmentId', 'name location')
     .populate('userId', 'email role isActive profileImage')
+    .populate('departmentId', 'name location description contactNumber')
     .populate('services.serviceId');
   if (!doctor) {
     return res.status(404).json({ message: 'Doctor not found' });
@@ -457,8 +457,8 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
   }
 
   const populatedDoctor = await Doctor.findById(doctor._id)
-    .populate('departmentId', 'name location')
     .populate('userId', 'email role isActive profileImage')
+    .populate('departmentId', 'name location description contactNumber')
     .populate('services.serviceId');
   res.status(200).json(populatedDoctor);
 });
