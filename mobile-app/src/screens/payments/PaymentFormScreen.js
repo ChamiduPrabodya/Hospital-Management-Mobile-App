@@ -16,7 +16,7 @@ const PAYMENT_METHODS = [
 
 const PaymentFormScreen = ({ route, navigation }) => {
   const { appointmentId, appointment, amount: routeAmount } = route.params;
-  const appointmentAmount = appointment?.serviceId?.price ?? routeAmount ?? '';
+  const appointmentAmount = appointment?.serviceSnapshot?.price ?? appointment?.serviceId?.price ?? routeAmount ?? '';
   const [amount] = useState(appointmentAmount ? String(appointmentAmount) : '');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [loading, setLoading] = useState(false);
