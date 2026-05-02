@@ -1,46 +1,85 @@
 const Department = require('../models/department.model');
+const asyncHandler = require('../utils/asyncHandler');
+const { sendSuccess } = require('../utils/apiResponse');
+const { validateObjectIdParam } = require('../utils/validateObjectId');
 
-// Get all departments from the database
-exports.getDepartments = async (req, res) => {
-    try {
-        const depts = await Department.find();
-        res.status(200).json(depts);
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to fetch departments', error: error.message });
-    }
-};
+const normalizeDepartmentPayload = (payload = {}) => ({
+  name: String(payload.name || '').trim(),
+  description: String(payload.description || '').trim(),
+  location: String(payload.location || '').trim(),
+  contactNumber: String(payload.contactNumber || '').trim(),
+});
 
-// Create and save a new department
-exports.createDepartment = async (req, res) => {
-    try {
-        const newDept = new Department(req.body);
-        const savedDept = await newDept.save();
-        res.status(201).json(savedDept);
-    } catch (error) {
-        res.status(400).json({ message: 'Failed to create department', error: error.message });
-    }
-};
+exports.getDepartments = asyncHandler(async (req, res) => {
+  const departments = await Department.find().sort({ name: 1, createdAt: -1 });
+  res.status(200).json(departments);
+});
 
-// Update an existing department by ID
-exports.updateDepartment = async (req, res) => {
-    try {
-        const updatedDept = await Department.findByIdAndUpdate(
-            req.params.id, 
-            req.body, 
-            { new: true } // Return the modified document
-        );
-        res.status(200).json(updatedDept);
-    } catch (error) {
-        res.status(400).json({ message: 'Failed to update department', error: error.message });
-    }
-};
+exports.createDepartment = asyncHandler(async (req, res) => {
+  const payload = normalizeDepartmentPayload(req.body);
 
-// Delete a department by ID
-exports.deleteDepartment = async (req, res) => {
-    try {
-        await Department.findByIdAndDelete(req.params.id);
-        res.status(200).json({ message: 'Department deleted successfully' });
-    } catch (error) {
-        res.status(400).json({ message: 'Failed to delete department', error: error.message });
-    }
-};
+  if (!payload.name || !payload.description || !payload.location) {
+    return res.status(400).json({
+      message: 'Department name, description, and location are required',
+    });
+  }
+
+  const existingDepartment = await Department.findOne({
+    name: { $regex: `^${payload.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+  });
+
+  if (existingDepartment) {
+    return res.status(409).json({ message: 'A department with this name already exists' });
+  }
+
+  const department = await Department.create(payload);
+  res.status(201).json(department);
+});
+
+exports.updateDepartment = asyncHandler(async (req, res) => {
+  if (!validateObjectIdParam(res, req.params.id, 'department ID')) return;
+
+  const department = await Department.findById(req.params.id);
+  if (!department) {
+    return res.status(404).json({ message: 'Department not found' });
+  }
+
+  const payload = normalizeDepartmentPayload({
+    name: req.body.name !== undefined ? req.body.name : department.name,
+    description: req.body.description !== undefined ? req.body.description : department.description,
+    location: req.body.location !== undefined ? req.body.location : department.location,
+    contactNumber: req.body.contactNumber !== undefined ? req.body.contactNumber : department.contactNumber,
+  });
+
+  if (!payload.name || !payload.description || !payload.location) {
+    return res.status(400).json({
+      message: 'Department name, description, and location are required',
+    });
+  }
+
+  const duplicateDepartment = await Department.findOne({
+    _id: { $ne: department._id },
+    name: { $regex: `^${payload.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+  });
+
+  if (duplicateDepartment) {
+    return res.status(409).json({ message: 'A department with this name already exists' });
+  }
+
+  Object.assign(department, payload);
+  await department.save();
+
+  res.status(200).json(department);
+});
+
+exports.deleteDepartment = asyncHandler(async (req, res) => {
+  if (!validateObjectIdParam(res, req.params.id, 'department ID')) return;
+
+  const department = await Department.findById(req.params.id);
+  if (!department) {
+    return res.status(404).json({ message: 'Department not found' });
+  }
+
+  await department.deleteOne();
+  return sendSuccess(res, 200, 'Department deleted successfully');
+});
