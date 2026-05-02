@@ -14,6 +14,7 @@ const doctorSchema = new mongoose.Schema(
         timeSlots: [{ type: String, required: true }],
       },
     ],
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
     image: { type: String },
     imageAssetId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileAsset', default: null },
     description: { type: String },

@@ -5,6 +5,7 @@ const connectDB = require('../config/db');
 
 const User = require('../models/user.model');
 const Doctor = require('../models/doctor.model');
+const Department = require('../models/department.model');
 const Service = require('../models/service.model');
 const Appointment = require('../models/appointment.model');
 const Payment = require('../models/payment.model');
@@ -36,6 +37,13 @@ const upsertService = (service) =>
     { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
   );
 
+const upsertDepartment = (department) =>
+  Department.findOneAndUpdate(
+    { name: department.name },
+    department,
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+  );
+
 const seed = async () => {
   if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
     throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD are required in backend/.env');
@@ -61,10 +69,38 @@ const seed = async () => {
     address: 'Kandy',
   });
 
+  const departments = await Promise.all([
+    upsertDepartment({
+      name: 'Cardiology',
+      description: 'Heart and cardiovascular care.',
+      location: 'Block A, Level 2',
+      contactNumber: '0112345678',
+    }),
+    upsertDepartment({
+      name: 'Dermatology',
+      description: 'Skin, hair, and allergy care.',
+      location: 'Block B, Level 1',
+      contactNumber: '0112345680',
+    }),
+    upsertDepartment({
+      name: 'Pediatrics',
+      description: 'Child and adolescent health services.',
+      location: 'Block C, Level 3',
+      contactNumber: '0112345682',
+    }),
+    upsertDepartment({
+      name: 'Orthopedics',
+      description: 'Bone, joint, and sports injury care.',
+      location: 'Block D, Level 2',
+      contactNumber: '0112345684',
+    }),
+  ]);
+
   const doctors = await Promise.all([
     upsertDoctor({
       name: 'Dr. Amara Perera',
       specialization: 'Cardiology',
+      departmentId: departments[0]._id,
       experience: 12,
       description: 'Senior cardiologist specializing in preventive heart care.',
       consultationFee: 3500,
@@ -73,6 +109,7 @@ const seed = async () => {
     upsertDoctor({
       name: 'Dr. Nuwan Silva',
       specialization: 'Dermatology',
+      departmentId: departments[1]._id,
       experience: 8,
       description: 'Treats skin, hair, and allergy-related conditions.',
       consultationFee: 2800,
@@ -81,6 +118,7 @@ const seed = async () => {
     upsertDoctor({
       name: 'Dr. Ishara Fernando',
       specialization: 'Pediatrics',
+      departmentId: departments[2]._id,
       experience: 10,
       description: 'Child health specialist for infants, children, and teens.',
       consultationFee: 3000,
@@ -89,6 +127,7 @@ const seed = async () => {
     upsertDoctor({
       name: 'Dr. Kavindu Jayasinghe',
       specialization: 'Orthopedics',
+      departmentId: departments[3]._id,
       experience: 15,
       description: 'Bone, joint, and sports injury consultant.',
       consultationFee: 4000,
@@ -110,6 +149,7 @@ const seed = async () => {
 
   const services = await Promise.all([
     upsertService({
+      departmentId: departments[0]._id,
       serviceName: 'General Consultation',
       description: 'Basic doctor consultation and medical advice.',
       price: 1500,
@@ -117,6 +157,7 @@ const seed = async () => {
       availabilityStatus: true,
     }),
     upsertService({
+      departmentId: departments[0]._id,
       serviceName: 'Cardiology Checkup',
       description: 'Heart health review with specialist consultation.',
       price: 4500,
@@ -124,6 +165,7 @@ const seed = async () => {
       availabilityStatus: true,
     }),
     upsertService({
+      departmentId: departments[2]._id,
       serviceName: 'Child Health Consultation',
       description: 'Pediatric consultation and child health guidance.',
       price: 2500,
@@ -131,6 +173,7 @@ const seed = async () => {
       availabilityStatus: true,
     }),
     upsertService({
+      departmentId: departments[3]._id,
       serviceName: 'Orthopedic Consultation',
       description: 'Bone, joint, and injury assessment.',
       price: 3500,
@@ -138,6 +181,46 @@ const seed = async () => {
       availabilityStatus: true,
     }),
   ]);
+
+  doctors[0].services = [
+    {
+      serviceId: services[0]._id,
+      price: services[0].price,
+      duration: services[0].duration,
+      availabilityStatus: true,
+    },
+    {
+      serviceId: services[1]._id,
+      price: services[1].price,
+      duration: services[1].duration,
+      availabilityStatus: true,
+    },
+  ];
+  doctors[1].services = [
+    {
+      serviceId: services[0]._id,
+      price: services[0].price,
+      duration: services[0].duration,
+      availabilityStatus: true,
+    },
+  ];
+  doctors[2].services = [
+    {
+      serviceId: services[2]._id,
+      price: services[2].price,
+      duration: services[2].duration,
+      availabilityStatus: true,
+    },
+  ];
+  doctors[3].services = [
+    {
+      serviceId: services[3]._id,
+      price: services[3].price,
+      duration: services[3].duration,
+      availabilityStatus: true,
+    },
+  ];
+  await Promise.all(doctors.map((doctor) => doctor.save()));
 
   const appointment = await Appointment.findOneAndUpdate(
     {

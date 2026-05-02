@@ -16,6 +16,7 @@ const ServiceCard = ({ service, onPress }) => {
       </View>
       <View style={styles.info}>
         <Text style={styles.name}>{service.serviceName}</Text>
+        {service?.departmentId?.name ? <Text style={styles.department}>{service.departmentId.name}</Text> : null}
         <Text style={styles.desc} numberOfLines={2}>{service.description}</Text>
         <View style={styles.footRow}>
           <Text style={styles.price}>{price}</Text>
@@ -86,6 +87,12 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     lineHeight: 17,
     marginBottom: 8,
+  },
+  department: {
+    fontSize: 11,
+    color: COLORS.tealBright,
+    fontWeight: FONTS.semibold,
+    marginBottom: 3,
   },
   footRow: {
     flexDirection: 'row',

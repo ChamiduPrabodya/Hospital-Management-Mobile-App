@@ -22,6 +22,9 @@ const DoctorCard = ({ doctor, onPress }) => {
       <View style={styles.info}>
         <Text style={styles.name}>{doctor.name || 'Doctor name'}</Text>
         <Text style={styles.specialization}>{doctor.specialization || 'Specialist'}</Text>
+        {doctor?.departmentId?.name ? (
+          <Text style={styles.department}>{doctor.departmentId.name}</Text>
+        ) : null}
         <View style={styles.metaRow}>
           <Text style={styles.metaText}>{serviceCount} services</Text>
           <Text style={styles.metaText}>{doctor.experience ?? 0} yrs exp</Text>
@@ -88,6 +91,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginVertical: 4,
+  },
+  department: {
+    fontSize: 12,
+    color: '#0d7f6f',
+    fontWeight: '600',
+    marginBottom: 2,
   },
   metaRow: {
     flexDirection: 'row',
